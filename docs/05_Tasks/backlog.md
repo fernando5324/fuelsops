@@ -1,0 +1,441 @@
+# Backlog de Tareas
+
+Backlog granular del proyecto Sertoco, derivado de `docs/04_Roadmap/roadmap.md`
+y de las decisiones registradas en `docs/03_Decisions/`.
+
+Convenciones de estados, prioridades y formato: ver `README.md` de esta
+misma carpeta.
+
+## Estado general
+
+| Fase/Flujo | Estado |
+|------------|--------|
+| A. Base de datos y arquitectura | Completado: esquema, auditoría, estados, semillas, modelos Eloquent (Auditable/LogicalDelete), traducciones es y SQL-run implementados. Pendiente: revisión con datos reales (T-009) |
+| B. Formulario público           | Completado (verificado E2E por HTTP); pendiente anti-spam (T-031) pleno |
+| C. Panel interno (Ant Design)   | Completado: login/registro, layout, dashboard, pedidos, estado+historial, adjuntos, usuarios. Pendiente: perfil Breeze (T-050) |
+| D. Catálogos y estados          | Completado: CRUD de los 9 módulos + activo/inactivo en el panel |
+| E. Validaciones y reglas        | Pendiente de confirmación con Sertoco |
+| F. Integraciones externas       | Backlog (futuro) |
+| G. Reportes y mejoras           | No iniciado |
+
+---
+
+## A. Base de datos y arquitectura (Roadmap Fase 1)
+
+- [x] T-001 — Identificar el flujo principal de pedido. (roadmap.md Fase 1)
+- [x] T-002 — Identificar entidades de catálogo. (ADR-001)
+- [x] T-003 — Separar clientes, conductores y vehículos de los pedidos. (ADR-001)
+- [x] T-004 — Definir pedidos (orders) y detalles de pedido (order_details). (ADR-001, database_design.md)
+- [x] T-005 — Definir adjuntos de pedido (media_files). (ADR-001)
+- [x] T-006 — Definir cálculos provisionales de totales. (ADR-001, database.sql)
+- [x] T-007 — Definir flujo público → interno y modelo de estados. (ADR-004)
+- [x] T-008 — Definir convención de campos de auditoría y usuario sistema. (ADR-005)
+
+- [ ] T-009 — Revisar el SQL con los datos reales de Sertoco.
+    - Prioridad: Alta
+    - Fase: A
+    - Dependencias: ninguna
+    - Referencias: `docs/02_Database/database.sql`, ADR-001
+    - Criterio de aceptación: el esquema SQL es validado con ejemplos
+      reales y se corrigen inconsistencias detectadas.
+
+- [x] T-010 — Aplicar convención de auditoría e `is_deleted` en `database.sql`.
+    - Prioridad: Alta
+    - Fase: A
+    - Dependencias: T-008
+    - Referencias: `database.sql`, ADR-005
+    - Criterio de aceptación: todas las tablas de negocio tienen
+      `created_at`, `updated_at` (TimeZone 0), `created_by`, `updated_by`;
+      los módulos principales y entidades maestras llevan `is_deleted`;
+      los catálogos simples no.
+
+- [x] T-011 — Agregar tablas `order_statuses` y `order_status_history`.
+    - Prioridad: Alta
+    - Fase: A
+    - Dependencias: T-007
+    - Referencias: `database.sql`, ADR-004
+    - Criterio de aceptación: catálogo de estados extensible (sin ENUM),
+      FK `orders.status_id` y tabla de historial con estado anterior,
+      nuevo, usuario y fecha.
+
+- [x] T-012 — Agregar estados iniciales y usuario "sistema" como seed.
+    - Prioridad: Alta
+    - Fase: A
+    - Dependencias: T-011
+    - Referencias: ADR-004, ADR-005
+    - Criterio de aceptación: semilla con `Pendiente` (por defecto),
+      `Atendido`, `Anulado` y usuario `sistema` para el formulario público.
+
+- [x] T-013 — Definir semillas de catálogos iniciales (asesores, plantas,
+      mayoristas, productos).
+    - Prioridad: Media
+    - Fase: A
+    - Dependencias: T-012
+    - Referencias: roadmap.md Fase 1
+    - Criterio de aceptación: datos iniciales cargados con `created_by = usuario sistema`.
+      Implementado en `docs/02_Database/SEEDS.sql` y aplicado con `php artisan sql:run`.
+
+- [x] T-014 — Crear modelos Eloquent para las entidades de negocio.
+    - Prioridad: Media
+    - Fase: A
+    - Dependencias: T-010
+    - Referencias: ADR-064
+    - Criterio de aceptación: modelos con castings, soft deletes
+      (`is_deleted`) en módulos principales y relaciones documentadas.
+      Implementado con los traits `Auditable` y `LogicalDelete`
+      (app/Models/Concerns) y 13 modelos.
+
+- [x] T-015 — Configurar `HandleInertiaRequests` para exponer datos globales
+      (traducciones del panel, usuario actual, configuración).
+    - Prioridad: Media
+    - Fase: A
+    - Dependencias: ninguna
+    - Referencias: ADR-062
+    - Criterio de aceptación: el panel consume traducciones centralizadas.
+      Implementado: `flag_translations`, `strict` y se comparte `flash`;
+
+---
+
+## B. Formulario público de registro de pedidos (Roadmap Fase 2)
+
+El formulario es público (sin login). Al guardar crea la orden con
+estado `Pendiente` por defecto.
+
+- [ ] T-020 — Definir especificación del formulario público (campos, flujo
+      y mensajes).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-007, T-009
+    - Referencias: ADR-004
+    - Criterio de aceptación: documento de especificación aprobado por Sertoco.
+      Nota: implementación hecha y verificada E2E; falta validación/ajuste con Sertoco.
+
+- [x] T-021 — Crear ruta pública del formulario (sin middleware auth).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: ninguna
+    - Referencias: routes/web.php
+    - Criterio de aceptación: se accede al formulario sin iniciar sesión.
+
+- [x] T-022 — Diseñar layout del formulario público (estilo claro e
+      intuitivo, con su propio layout independiente del panel).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-021
+    - Referencias: ADR-062
+    - Criterio de aceptación: layout responsive, limpio y validado.
+
+- [x] T-023 — Cargar catálogos en el formulario (asesores, plantas,
+      mayoristas, productos).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-010, T-013
+    - Criterio de aceptación: selects alimentados con registros activos.
+
+- [x] T-024 — Registro de cliente: reutilizar por RUC o crear si no existe.
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-010
+    - Referencias: `customers.tax_id` única, ADR-004
+    - Criterio de aceptación: si el RUC ya existe se vincula el cliente al
+      pedido; si no, se crea y se vincula. Verificado E2E: RUC existente
+      reutilizado (id 3) en la orden HTTP de prueba.
+
+- [x] T-025 — Seleccionar conductor (por licencia) y vehículos (tankera +
+      tractora).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-010
+    - Criterio de aceptación: selección válida con reglas según vehículos activos.
+
+- [x] T-026 — Filas dinámicas de detalle (agregar/eliminar).
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-023
+    - Criterio de aceptación: agregar/quitar líneas SCOP + plant + mayorista +
+      producto + galones + precio + compartimentos.
+
+- [x] T-027 — Calcular totales provisionales en vivo.
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-026
+    - Referencias: database_design.md (cálculo provisional, ADR-001)
+    - Criterio de aceptación: `detail_total = gallons * sale_price`,
+      `total_gallons` y `total_sale` actualizados al editar.
+
+- [x] T-028 — Validar y guardar pedido (transacción orden + detalles) con
+      estado `Pendiente`.
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-024, T-025, T-026
+    - Criterio de aceptación: pedido y detalles persistidos en una sola
+      transacción con `created_by = usuario sistema`. Implementado en
+      `OrderService::create` y verificado por HTTP (orden 4 creada).
+
+- [x] T-029 — Subida de factura/comprobante en el formulario público.
+    - Prioridad: Alta
+    - Fase: B
+    - Dependencias: T-028
+    - Referencias: `media_files`, ADR-001
+    - Criterio de aceptación: archivo almacenado y registrado en `media_files`
+      vinculado al pedido; visibilidad privada. Implementado en
+      `MediaService`, disco `local` (storage/app/private).
+
+- [x] T-030 — Mensaje de confirmación y manejo de errores en el formulario.
+    - Prioridad: Media
+    - Fase: B
+    - Dependencias: T-028
+    - Criterio de aceptación: feedback claro al cliente final y control de
+      duplicados (reintento seguro). Página `/pedidos/{order}/confirmado`
+      con flash y reintento seguro por id único.
+
+- [ ] T-031 — Control anti-spam / limitaciones del envío público.
+    - Prioridad: Media
+    - Fase: B
+    - Dependencias: T-028
+    - Criterio de aceptación: protección básica definida (tiempo entre
+      envíos, token, captcha opcional).
+
+---
+
+## C. Panel interno (login + Ant Design)
+
+Todo el panel autenticado se construye con Ant Design.
+
+- [x] T-040 — Integrar Ant Design al proyecto (dependencias y ConfigProvider).
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: ninguna
+    - Referencias: ADR-064
+    - Criterio de aceptación: `antd` instalado, tema claro y locale es_ES.
+
+- [x] T-041 — Sistema de traducciones del panel (español inicial).
+    - Prioridad: Media
+    - Fase: C
+    - Dependencias: T-015
+    - Referencias: ADR-062
+    - Criterio de aceptación: textos del panel centralizados en `lang/es/`.
+      Implementado también `resources/js/i18n.js` (fallback del front).
+      Con la fuente única (T-041 revisado): `resources/js/i18n.js` fue
+      eliminado; el backend comparte en cada Inertia page las props
+      `translations` (todos los grupos de `lang/es/*.php`, incluidos los
+      nuevos `profile.php`, `pages.php`, `tiptap.php` y `services.php`) y
+      `locale` vía `HandleInertiaRequests`. El front consume el hook
+      `useTranslations` (lookup anidado por punto, fallback = clave cruda,
+      soporte `replace` y `locale`) en todos los componentes y páginas del
+      panel y flujo público; los botones de guardar/enviar usan el
+      componente `SubmitButton` (anti doble clic por `processing` global).
+
+- [x] T-042 — Página de login con Ant Design.
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: T-040
+    - Criterio de aceptación: login funcional con validación y mensajes claros.
+      Verificado por HTTP (login real → /panel).
+
+- [x] T-043 — Layout del panel interno con Ant Design (menú lateral,
+      topbar, contenido).
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: T-040
+    - Criterio de aceptación: navegación a pedidos, catálogos y perfil.
+
+- [x] T-044 — Dashboard del panel interno.
+    - Prioridad: Media
+    - Fase: C
+    - Dependencias: T-043
+    - Criterio de aceptación: resumen de pedidos por estado y accesos directos.
+
+- [x] T-045 — Listado de pedidos (tabla con filtros y paginación).
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: T-043
+    - Criterio de aceptación: listado con búsqueda por cliente/RUC/placa y
+      filtro por estado/asesor/fecha. La paginación y filtros básicos están;
+      la búsqueda avanzada queda para la Fase G (T-092).
+
+- [x] T-046 — Vista de detalle de pedido.
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: T-045
+    - Criterio de aceptación: muestra datos del pedido, detalles, totales,
+      auditoría y archivos adjuntos. Verificado por HTTP (/pedidos/4 → 200).
+
+- [x] T-047 — Cambio de estado de pedido (Atendido/Anulado) con historial.
+    - Prioridad: Alta
+    - Fase: C
+    - Dependencias: T-046, T-011
+    - Referencias: ADR-004
+    - Criterio de aceptación: al cambiar estado se registra fila en
+      `order_status_history` con usuario y fecha; no se permite volver a un
+      estado anulado sin regla definida. Historial verificado (3 filas).
+      La regla exacta de transiciones queda en la Fase E con Sertoco.
+
+- [x] T-048 — Visualización y gestión de archivos adjuntos en el panel.
+    - Prioridad: Media
+    - Fase: C
+    - Dependencias: T-046
+    - Referencias: `media_files`, ADR-001
+    - Criterio de aceptación: descargar/previsualizar facturas y comprobantes
+      con acceso autorizado. Descarga verificada por HTTP (/archivos/1/descargar → 200).
+
+- [x] T-049 — Gestión de usuarios internos (CRUD y roles básicos).
+    - Prioridad: Media
+    - Fase: C
+    - Dependencias: T-043
+    - Referencias: `users` (is_owner, is_active)
+    - Criterio de aceptación: alta/baja de usuarios y control de accesos.
+
+- [ ] T-050 — Migrar/portar páginas de perfil y auth al panel Ant Design.
+    - Prioridad: Baja
+    - Fase: C
+    - Dependencias: T-040
+    - Criterio de aceptación: consistencia visual total del panel.
+      Nota: login y registro ya están en Ant Design; solo quedan las
+      páginas de perfil (Profile/Edit) con componentes Breeze.
+
+---
+
+## D. Gestión de catálogos y estados (Roadmap Fase 3)
+
+Cada módulo sigue la estructura de ADR-064 (`Controller` + `ApiController`
++ `Service` opcional) y el patrón `is_active` / `is_deleted` de ADR-001/005.
+
+- [x] T-060 — Gestión de asesores (advisors).
+    - Prioridad: Media
+    - Fase: D
+    - Criterio de aceptación: CRUD + activo/inactivo en el panel.
+      Verificado por HTTP (POST asesor → 302 y aparece en el listado).
+
+- [x] T-061 — Gestión de plantas (plants).
+    - Prioridad: Media
+    - Fase: D
+    - Criterio de aceptación: CRUD + activo/inactivo en el panel.
+
+- [x] T-062 — Gestión de mayoristas (wholesalers).
+    - Prioridad: Media
+    - Fase: D
+    - Criterio de aceptación: CRUD + activo/inactivo en el panel.
+
+- [x] T-063 — Gestión de productos (products).
+    - Prioridad: Media
+    - Fase: D
+    - Criterio de aceptación: CRUD + activo/inactivo en el panel.
+
+- [x] T-064 — Gestión de clientes (customers).
+    - Prioridad: Alta
+    - Fase: D
+    - Criterio de aceptación: CRUD con RUC único, mayorista preferido y
+      baja lógica (`is_deleted`).
+
+- [x] T-065 — Gestión de conductores (drivers).
+    - Prioridad: Media
+    - Fase: D
+    - Criterio de aceptación: CRUD con licencia única y baja lógica.
+
+- [x] T-066 — Gestión de vehículos (vehicles).
+    - Prioridad: Alta
+    - Fase: D
+    - Criterio de aceptación: CRUD de tankera/tractora con placa única y
+      baja lógica.
+
+- [x] T-067 — Gestión de estados de pedido (alta de nuevos estados).
+    - Prioridad: Media
+    - Fase: D
+    - Dependencias: T-011
+    - Referencias: ADR-004
+    - Criterio de aceptación: crear/editar/desactivar estados desde el panel
+      sin alterar el esquema (catálogo, no ENUM).
+
+---
+
+## E. Validaciones y reglas de negocio (Roadmap Fase 4)
+
+Todo queda pendiente de confirmación con Sertoco. Ninguna tarea debe avanzar
+a `Done` sin la regla real confirmada.
+
+- [ ] T-070 — Confirmar fórmula definitiva de totales de pedido.
+    - Prioridad: Alta
+    - Fase: E
+    - Referencias: ADR-001 (cálculo provisional)
+    - Criterio de aceptación: regla real documentada y aplicada.
+
+- [ ] T-071 — Confirmar reglas de compartimentos.
+    - Prioridad: Alta
+    - Fase: E
+    - Criterio de aceptación: validación de compartimentos definida.
+
+- [ ] T-072 — Confirmar reglas de SCOP.
+    - Prioridad: Media
+    - Fase: E
+    - Criterio de aceptación: formato/reglas de SCOP definidos.
+
+- [ ] T-073 — Confirmar campos requeridos.
+    - Prioridad: Media
+    - Fase: E
+    - Criterio de aceptación: lista de requeridos definida y aplicada.
+
+- [ ] T-074 — Confirmar reglas de cliente (RUC, datos, duplicados).
+    - Prioridad: Media
+    - Fase: E
+    - Criterio de aceptación: reglas de cliente confirmadas.
+
+- [ ] T-075 — Confirmar validaciones de conductor y vehículos.
+    - Prioridad: Media
+    - Fase: E
+    - Criterio de aceptación: reglas de licencia y vehículos confirmadas.
+
+---
+
+## F. Integraciones externas (Roadmap Fase 5)
+
+Solo backlog. No implementar hasta identificar los servicios disponibles.
+
+- [ ] T-080 — Identificar servicios de información legal del cliente.
+    - Prioridad: Baja
+    - Fase: F
+    - Criterio de aceptación: candidatos evaluados y documentados.
+
+- [ ] T-081 — Identificar fuentes de información de licencias de conducir.
+    - Prioridad: Baja
+    - Fase: F
+
+- [ ] T-082 — Identificar fuentes de información de vehículos.
+    - Prioridad: Baja
+    - Fase: F
+
+- [ ] T-083 — Definir alcance y contratos de las integraciones a adoptar.
+    - Prioridad: Baja
+    - Fase: F
+
+---
+
+## G. Reportes y mejoras (Roadmap Fase 6)
+
+- [ ] T-090 — Listado de pedidos consolidado.
+    - Prioridad: Alta
+    - Fase: G
+    - Criterio de aceptación: listado con estados y totales.
+
+- [ ] T-091 — Vista de detalle con histórico de estados.
+    - Prioridad: Alta
+    - Fase: G
+    - Dependencias: T-047
+    - Criterio de aceptación: línea de tiempo de cambios de estado visible.
+
+- [ ] T-092 — Búsqueda y filtros avanzados.
+    - Prioridad: Media
+    - Fase: G
+
+- [ ] T-093 — Exportación/reportes según requerimientos.
+    - Prioridad: Media
+    - Fase: G
+
+- [ ] T-094 — Requerimientos de datos históricos.
+    - Prioridad: Media
+    - Fase: G
+    - Referencias: ADR-001 (limitación de snapshots históricos)
+
+- [ ] T-095 — Mejoras de gestión documental.
+    - Prioridad: Baja
+    - Fase: G

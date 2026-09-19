@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Http\Controllers\Platform\OrderStatuses;
+
+use App\Http\Controllers\Platform\Catalogs\CatalogController;
+use App\Models\OrderStatus;
+
+class OrderStatusController extends CatalogController
+{
+    protected string $model = OrderStatus::class;
+
+    protected string $resource = 'order-statuses';
+
+    protected string $titleKey = 'menus.order_statuses';
+
+    protected array $searchable = ['code', 'name'];
+
+    protected array $fields = [
+        ['key' => 'code', 'label' => 'catalogs.code', 'type' => 'text', 'required' => true],
+        ['key' => 'name', 'label' => 'common.name', 'type' => 'text', 'required' => true],
+        ['key' => 'description', 'label' => 'catalogs.description', 'type' => 'textarea', 'required' => false],
+        ['key' => 'color', 'label' => 'catalogs.color', 'type' => 'text', 'required' => false],
+        ['key' => 'is_default', 'label' => 'catalogs.is_default', 'type' => 'boolean', 'required' => false],
+        ['key' => 'is_active', 'label' => 'common.active', 'type' => 'boolean', 'required' => true],
+    ];
+}

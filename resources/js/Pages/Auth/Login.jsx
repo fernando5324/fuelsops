@@ -1,0 +1,76 @@
+import React, { useEffect } from 'react';
+import { usePage, router, Link } from '@inertiajs/react';
+import { App, Card, Checkbox, Form, Input, Typography } from 'antd';
+import { LockOutlined, MailOutlined } from '@ant-design/icons';
+import useTranslations from '@/hooks/useTranslations';
+import SubmitButton from '@/Components/SubmitButton';
+
+export default function Login() {
+    const { message } = App.useApp();
+    const { errors } = usePage().props;
+    const { t } = useTranslations();
+
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            message.error(Object.values(errors)[0]);
+        }
+    }, [errors, message]);
+
+    const onFinish = (values) => {
+        router.post('/login', values, {
+            onError: () => {},
+        });
+    };
+
+    return (
+        <div
+            style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, #1f3a47 0%, #2c5f73 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+            }}
+        >
+            <Card style={{ width: 400, borderRadius: 12 }}>
+                <Typography.Title level={3} style={{ textAlign: 'center' }}>
+                    Sertoco
+                </Typography.Title>
+                <Typography.Paragraph type="secondary" style={{ textAlign: 'center' }}>
+                    {t('auth.login')}
+                </Typography.Paragraph>
+
+                <Form layout="vertical" onFinish={onFinish} autoComplete="off">
+                    <Form.Item
+                        name="email"
+                        label={t('auth.email')}
+                        rules={[{ required: true, type: 'email', message: t('common.required') }]}
+                    >
+                        <Input prefix={<MailOutlined />} placeholder={t('common.email_placeholder')} />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="password"
+                        label={t('auth.password_label')}
+                        rules={[{ required: true, message: t('common.required') }]}
+                    >
+                        <Input.Password prefix={<LockOutlined />} placeholder="••••••••" />
+                    </Form.Item>
+
+                    <Form.Item name="remember" valuePropName="checked">
+                        <Checkbox>{t('auth.remember_me')}</Checkbox>
+                    </Form.Item>
+
+                    <Form.Item>
+                        <SubmitButton block>{t('auth.login')}</SubmitButton>
+                    </Form.Item>
+                </Form>
+
+                <div style={{ textAlign: 'center' }}>
+                    <Link href="/register">{t('auth.register')}</Link>
+                </div>
+            </Card>
+        </div>
+    );
+}

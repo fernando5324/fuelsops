@@ -1,0 +1,168 @@
+import React from 'react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { Layout, Menu, Dropdown, Space, Avatar, Typography, theme } from 'antd';
+import {
+    DashboardOutlined,
+    FileTextOutlined,
+    TeamOutlined,
+    UserOutlined,
+    LogoutOutlined,
+    IdcardOutlined,
+    ShopOutlined,
+    AppstoreOutlined,
+    EnvironmentOutlined,
+    ProductOutlined,
+    TruckOutlined,
+    CarOutlined,
+    TagsOutlined,
+    TagOutlined,
+    HomeOutlined,
+} from '@ant-design/icons';
+import useTranslations from '@/hooks/useTranslations';
+
+const { Sider, Header, Content } = Layout;
+
+function iconFor(index) {
+    const icons = {
+        0: HomeOutlined,
+        1: EnvironmentOutlined,
+        2: ShopOutlined,
+        3: ProductOutlined,
+        4: TeamOutlined,
+        5: IdcardOutlined,
+        6: TruckOutlined,
+        7: CarOutlined,
+        8: TagsOutlined,
+    };
+
+    return icons[index] || AppstoreOutlined;
+}
+
+export default function PanelLayout({ children, title }) {
+    const { auth } = usePage().props;
+    const user = auth?.user;
+    const { t } = useTranslations();
+    const path = window.location.pathname;
+    const {
+        token: { colorBgContainer, borderRadiusLG },
+    } = theme.useToken();
+
+    const catalogLinks = [
+        { key: 'asesores', label: <Link href="/catalogos/asesores">{t('menus.advisors')}</Link>, icon: iconFor(0) },
+        { key: 'mayoristas', label: <Link href="/catalogos/mayoristas">{t('menus.wholesalers')}</Link>, icon: iconFor(1) },
+        { key: 'plantas', label: <Link href="/catalogos/plantas">{t('menus.plants')}</Link>, icon: iconFor(2) },
+        { key: 'productos', label: <Link href="/catalogos/productos">{t('menus.products')}</Link>, icon: iconFor(3) },
+        { key: 'clientes', label: <Link href="/catalogos/clientes">{t('menus.customers')}</Link>, icon: iconFor(4) },
+        { key: 'conductores', label: <Link href="/catalogos/conductores">{t('menus.drivers')}</Link>, icon: iconFor(5) },
+        { key: 'vehiculos', label: <Link href="/catalogos/vehiculos">{t('menus.vehicles')}</Link>, icon: iconFor(6) },
+        { key: 'estados', label: <Link href="/catalogos/estados">{t('menus.order_statuses')}</Link>, icon: iconFor(7) },
+    ];
+
+    const items = [
+        { key: 'dashboard', icon: <DashboardOutlined />, label: <Link href="/panel">{t('menus.dashboard')}</Link> },
+        { key: 'pedidos', icon: <FileTextOutlined />, label: <Link href="/pedidos">{t('menus.orders')}</Link> },
+        {
+            key: 'catalogos',
+            icon: <AppstoreOutlined />,
+            label: t('menus.catalogs'),
+            children: catalogLinks,
+        },
+        { key: 'usuarios', icon: <TeamOutlined />, label: <Link href="/usuarios">{t('menus.users')}</Link> },
+        {
+            key: 'profile',
+            icon: <UserOutlined />,
+            label: <Link href="/profile">{t('menus.profile')}</Link>,
+        },
+    ];
+
+    let selectedKey = 'dashboard';
+    if (path.startsWith('/pedidos')) {
+        selectedKey = 'pedidos';
+    } else if (path.startsWith('/catalogos')) {
+        selectedKey = 'catalogos';
+    } else if (path.startsWith('/usuarios')) {
+        selectedKey = 'usuarios';
+    } else if (path.startsWith('/profile')) {
+        selectedKey = 'profile';
+    }
+
+    const userMenu = {
+        items: [
+            {
+                key: 'profile',
+                icon: <UserOutlined />,
+                label: <Link href="/profile">{t('menus.profile')}</Link>,
+            },
+            {
+                key: 'logout',
+                icon: <LogoutOutlined />,
+                label: t('auth.logout'),
+                onClick: () => {
+                    router.post('/logout');
+                },
+            },
+        ],
+    };
+
+    return (
+        <Layout style={{ minHeight: '100vh' }}>
+            <Sider breakpoint="lg" collapsedWidth="64">
+                <div
+                    style={{
+                        height: 48,
+                        margin: 16,
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 18,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                    }}
+                >
+                    <TagOutlined />
+                    Sertoco
+                </div>
+                <Menu
+                    theme="dark"
+                    mode="inline"
+                    selectedKeys={[selectedKey]}
+                    defaultOpenKeys={['catalogos']}
+                    items={items}
+                />
+            </Sider>
+            <Layout>
+                <Header
+                    style={{
+                        background: colorBgContainer,
+                        paddingInline: 24,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                    }}
+                >
+                    <Typography.Title level={4} style={{ margin: 0 }}>
+                        {title}
+                    </Typography.Title>
+                    <Dropdown menu={userMenu} placement="bottomRight">
+                        <Space style={{ cursor: 'pointer' }}>
+                            <Avatar icon={<UserOutlined />} />
+                            <span>{user?.first_name || user?.name}</span>
+                        </Space>
+                    </Dropdown>
+                </Header>
+                <Content style={{ margin: 24 }}>
+                    <div
+                        style={{
+                            padding: 24,
+                            background: colorBgContainer,
+                            borderRadius: borderRadiusLG,
+                            minHeight: 'calc(100vh - 120px)',
+                        }}
+                    >
+                        {children}
+                    </div>
+                </Content>
+            </Layout>
+        </Layout>
+    );
+}
