@@ -1,48 +1,53 @@
-import PrimaryButton from '@/Components/PrimaryButton';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import React, { useEffect } from 'react';
+import { usePage, router, Link } from '@inertiajs/react';
+import { Alert, App, Form, Typography } from 'antd';
 import useTranslations from '@/hooks/useTranslations';
+import SubmitButton from '@/Components/SubmitButton';
+import AuthLayout from '@/Layouts/AuthLayout';
 
 export default function VerifyEmail({ status }) {
+    const { message } = App.useApp();
+    const { errors } = usePage().props;
     const { t } = useTranslations();
-    const { post, processing } = useForm({});
 
-    const submit = (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            message.error(Object.values(errors)[0]);
+        }
+    }, [errors, message]);
 
-        post(route('verification.send'));
+    const onFinish = () => {
+        router.post(route('verification.send'), {}, {
+            onError: () => {},
+        });
     };
 
     return (
-        <GuestLayout>
-            <Head title={t('auth.verify_email')} />
-
-            <div className="mb-4 text-sm text-gray-600">
+        <AuthLayout subtitle={t('auth.verify_email')}>
+            <Typography.Paragraph type="secondary">
                 {t('auth.verify_email_hint')}
-            </div>
+            </Typography.Paragraph>
 
             {status === 'verification-link-sent' && (
-                <div className="mb-4 text-sm font-medium text-green-600">
-                    {t('profile.verification_sent')}
-                </div>
+                <Alert
+                    type="success"
+                    showIcon
+                    message={t('profile.verification_sent')}
+                    style={{ marginBottom: 16 }}
+                />
             )}
 
-            <form onSubmit={submit}>
-                <div className="mt-4 flex items-center justify-between">
-                    <PrimaryButton disabled={processing}>
-                        {t('profile.resend_verification')}
-                    </PrimaryButton>
+            <Form onFinish={onFinish}>
+                <Form.Item>
+                    <SubmitButton block>{t('profile.resend_verification')}</SubmitButton>
+                </Form.Item>
+            </Form>
 
-                    <Link
-                        href={route('logout')}
-                        method="post"
-                        as="button"
-                        className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >
-                        {t('auth.logout')}
-                    </Link>
-                </div>
-            </form>
-        </GuestLayout>
+            <div style={{ textAlign: 'center' }}>
+                <Link href={route('logout')} method="post" as="button">
+                    {t('auth.logout')}
+                </Link>
+            </div>
+        </AuthLayout>
     );
 }

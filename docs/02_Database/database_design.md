@@ -228,7 +228,7 @@ This provides traceability of who changed the status and when.
 Every business table includes the following audit fields:
 
 -   `created_at` --- `TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP`
--   `updated_at` --- `DATETIME NULL DEFAULT NULL` (stored in TimeZone 0)
+-   `updated_at` --- `DATETIME NULL DEFAULT NULL` (stored in America/Lima, UTC-5)
 -   `created_by` --- `BIGINT UNSIGNED NOT NULL` referencing `users`
 -   `updated_by` --- `BIGINT UNSIGNED NULL` referencing `users`
 

@@ -1,18 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { router, usePage, Link } from '@inertiajs/react';
-import { App, Button, Card, DatePicker, Input, Select, Space, Table, Tag, Typography } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import {
+    Alert,
+    App,
+    Button,
+    Card,
+    DatePicker,
+    Drawer,
+    Input,
+    Select,
+    Space,
+    Spin,
+    Table,
+    Tag,
+    Tooltip,
+    Typography,
+} from 'antd';
+import { EyeOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import PanelLayout from '../../../Layouts/PanelLayout';
 import useTranslations from '@/hooks/useTranslations';
+import formatDate from '@/lib/dates';
+import formatMoney from '@/lib/money';
+import statusColor from '@/lib/status';
+import OrderInspection from '@/Components/OrderInspection';
 
-export default function OrdersIndex({ orders, filter, statuses }) {
+const { RangePicker } = DatePicker;
+
+export default function OrdersIndex({ orders, filter, statuses, advisors }) {
     const { message } = App.useApp();
     const { flash } = usePage().props;
     const { t } = useTranslations();
+
     const [q, setQ] = useState(filter?.q || '');
     const [statusId, setStatusId] = useState(filter?.status_id || undefined);
-    const [date, setDate] = useState(filter?.order_date || undefined);
+    const [advisorId, setAdvisorId] = useState(filter?.advisor_id || undefined);
+    const [range, setRange] = useState([
+        filter?.date_from ? dayjs(filter.date_from) : null,
+        filter?.date_to ? dayjs(filter.date_to) : null,
+    ]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [inspection, setInspection] = useState(null);
+    const [failed, setFailed] = useState(false);
 
     useEffect(() => {
         if (flash?.success) {
@@ -22,12 +51,42 @@ export default function OrdersIndex({ orders, filter, statuses }) {
 
     const applyFilters = (overrides = {}) => {
         const params = {
-            q: q || undefined,
+            q: overrides.q !== undefined ? overrides.q : q || undefined,
             status_id: overrides.status_id !== undefined ? overrides.status_id : statusId,
-            order_date: overrides.date !== undefined ? overrides.date : date,
+            advisor_id: overrides.advisor_id !== undefined ? overrides.advisor_id : advisorId,
+            date_from: overrides.date_from,
+            date_to: overrides.date_to,
         };
 
+        if (params.status_id === undefined || params.status_id === '') {
+            delete params.status_id;
+        }
+        if (params.advisor_id === undefined || params.advisor_id === '') {
+            delete params.advisor_id;
+        }
+        if (!params.date_from) {
+            delete params.date_from;
+        }
+        if (!params.date_to) {
+            delete params.date_to;
+        }
+
         router.get('/pedidos', params, { preserveState: true, replace: true });
+    };
+
+    const loadInspection = async (id) => {
+        setSelectedId(id);
+        setInspection(null);
+        setFailed(false);
+        try {
+            const res = await fetch(`/pedidos/${id}/detalle`);
+            if (!res.ok) {
+                throw new Error(res.statusText);
+            }
+            setInspection(await res.json());
+        } catch (e) {
+            setFailed(true);
+        }
     };
 
     const columns = [
@@ -37,7 +96,12 @@ export default function OrdersIndex({ orders, filter, statuses }) {
             width: 90,
             render: (id) => <Link href={`/pedidos/${id}`}>{`#${id}`}</Link>,
         },
-        { title: t('order.order_date'), dataIndex: 'order_date', width: 110 },
+        {
+            title: t('order.order_date'),
+            dataIndex: 'order_date',
+            width: 160,
+            render: (v) => formatDate(v, { withTime: true }),
+        },
         {
             title: t('order.customer'),
             render: (_, row) => (
@@ -57,76 +121,168 @@ export default function OrdersIndex({ orders, filter, statuses }) {
         },
         {
             title: t('order.driver'),
-            render: (_, row) => row.driver?.name || '-',
+            render: (_, row) => (
+                <div>
+                    {row.driver?.name || '-'}
+                    <div>
+                        <Typography.Text type="secondary">
+                            {`T: ${row.tanker?.license_plate || '-'} · Tr: ${row.tractor?.license_plate || '-'}`}
+                        </Typography.Text>
+                    </div>
+                </div>
+            ),
+        },
+        {
+            title: t('order.gallons'),
+            dataIndex: 'total_gallons',
+            align: 'right',
+            width: 120,
+            render: (v) =>
+                v === null || v === undefined
+                    ? '-'
+                    : Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2 }),
+        },
+        {
+            title: t('order.total_sale'),
+            dataIndex: 'total_sale',
+            align: 'right',
+            width: 140,
+            render: (v) => (v === null || v === undefined ? '-' : formatMoney(v)),
         },
         {
             title: t('order.status'),
             dataIndex: 'status',
             width: 120,
             render: (status) => (
-                <Tag color={status?.color || 'default'}>{status?.name || '-'}</Tag>
+                <Tag color={statusColor(status)}>{status?.name || '-'}</Tag>
             ),
         },
         {
             title: t('common.actions'),
-            width: 90,
+            width: 64,
+            align: 'center',
             render: (_, row) => (
-                <Button type="link" size="small" href={`/pedidos/${row.id}`}>
-                    {t('common.view')}
-                </Button>
+                <Tooltip title={t('common.view')}>
+                    <Link
+                        href={`/pedidos/${row.id}`}
+                        className="ui-icon-link"
+                        aria-label={t('common.view')}
+                    >
+                        <EyeOutlined />
+                    </Link>
+                </Tooltip>
             ),
         },
     ];
 
     return (
-        <Card title={t('menus.orders')}>
-            <Space wrap style={{ marginBottom: 16 }}>
-                <Input.Search
-                    allowClear
-                    placeholder={t('common.search')}
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onSearch={() => applyFilters()}
-                    enterButton={<SearchOutlined />}
-                    style={{ width: 280 }}
-                />
-                <Select
-                    allowClear
-                    placeholder={t('order.status')}
-                    value={statusId}
-                    onChange={(v) => {
-                        setStatusId(v);
-                        applyFilters({ status_id: v });
-                    }}
-                    style={{ width: 180 }}
-                    options={(statuses || []).map((s) => ({ value: s.id, label: s.name }))}
-                />
-                <DatePicker
-                    placeholder={t('order.order_date')}
-                    value={date ? dayjs(date) : null}
-                    onChange={(v) => {
-                        setDate(v ? v.format('YYYY-MM-DD') : undefined);
-                        applyFilters({ date: v ? v.format('YYYY-MM-DD') : undefined });
-                    }}
-                />
-            </Space>
+        <PanelLayout title={t('menus.orders')}>
+            <Card>
+                <Space wrap style={{ marginBottom: 16, width: '100%' }}>
+                    <Input.Search
+                        allowClear
+                        placeholder={t('order.search_placeholder')}
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        onSearch={() => applyFilters({ q: q || undefined })}
+                        enterButton={<SearchOutlined />}
+                        className="ui-filter-search"
+                    />
+                    <Select
+                        allowClear
+                        placeholder={t('order.status')}
+                        value={statusId}
+                        onChange={(v) => {
+                            setStatusId(v);
+                            applyFilters({ status_id: v });
+                        }}
+                        className="ui-filter-status"
+                        options={(statuses || []).map((s) => ({ value: s.id, label: s.name }))}
+                    />
+                    <Select
+                        allowClear
+                        placeholder={t('order.advisor')}
+                        value={advisorId}
+                        onChange={(v) => {
+                            setAdvisorId(v);
+                            applyFilters({ advisor_id: v });
+                        }}
+                        className="ui-filter-advisor"
+                        options={(advisors || []).map((a) => ({ value: a.id, label: a.name }))}
+                    />
+                    <RangePicker
+                        format="DD/MM/YYYY"
+                        className="ui-filter-range"
+                        value={[range[0] ?? null, range[1] ?? null]}
+                        onChange={(dates) => {
+                            setRange(dates || [null, null]);
+                            applyFilters({
+                                date_from: dates && dates[0] ? dates[0].format('YYYY-MM-DD') : undefined,
+                                date_to: dates && dates[1] ? dates[1].format('YYYY-MM-DD') : undefined,
+                            });
+                        }}
+                    />
+                </Space>
 
-            <Table
-                rowKey="id"
-                dataSource={orders?.data || []}
-                columns={columns}
-                size="middle"
-                locale={{ emptyText: t('common.no_data') }}
-                pagination={{
-                    current: orders?.current_page || 1,
-                    pageSize: orders?.per_page || 15,
-                    total: orders?.total || 0,
-                    showTotal: (total) => `${total} ${t('common.records_found')}`,
-                    onChange: (page) => {
-                        router.get(`/pedidos`, { ...filter, page }, { preserveState: true });
-                    },
+                <Table
+                    rowKey="id"
+                    dataSource={orders?.data || []}
+                    columns={columns}
+                    size="middle"
+                    scroll={{ x: 'max-content' }}
+                    locale={{ emptyText: t('common.no_data') }}
+                    onRow={(row) => ({ onClick: () => loadInspection(row.id) })}
+                    pagination={{
+                        current: orders?.current_page || 1,
+                        pageSize: orders?.per_page || 15,
+                        total: orders?.total || 0,
+                        showTotal: (total) => `${total} ${t('common.records_found')}`,
+                        onChange: (page) => {
+                            router.get(`/pedidos`, { ...filter, page }, { preserveState: true });
+                        },
+                    }}
+                />
+            </Card>
+
+            <Drawer
+                title={
+                    selectedId
+                        ? `${t('order.order_detail')} #${selectedId}`
+                        : t('order.order_detail')
+                }
+                width={560}
+                open={!!selectedId}
+                onClose={() => {
+                    setSelectedId(null);
+                    setInspection(null);
+                    setFailed(false);
                 }}
-            />
-        </Card>
+                extra={
+                    selectedId ? (
+                        <Link href={`/pedidos/${selectedId}`}>
+                            <Button type="primary">{t('common.view')}</Button>
+                        </Link>
+                    ) : null
+                }
+            >
+                {failed ? (
+                    <Alert
+                        type="error"
+                        message={t('common.try_again')}
+                        action={
+                            <Button size="small" onClick={() => loadInspection(selectedId)}>
+                                {t('common.try_again')}
+                            </Button>
+                        }
+                    />
+                ) : inspection && inspection.order ? (
+                    <OrderInspection order={inspection.order} totals={inspection.totals} />
+                ) : (
+                    <div style={{ textAlign: 'center', padding: 48 }}>
+                        <Spin />
+                    </div>
+                )}
+            </Drawer>
+        </PanelLayout>
     );
 }

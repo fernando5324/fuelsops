@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
         last_login_at TIMESTAMP NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_by BIGINT UNSIGNED NOT NULL,
-        updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
         updated_by BIGINT UNSIGNED NULL,
         is_deleted TINYINT (1) NOT NULL DEFAULT 0,
         UNIQUE KEY uk_users_email (email),
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS advisors (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS wholesalers (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS plants (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS products (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS customers (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -270,7 +270,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -346,7 +346,7 @@ CREATE TABLE IF NOT EXISTS order_statuses (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -375,7 +375,7 @@ CREATE TABLE IF NOT EXISTS order_statuses (
 CREATE TABLE IF NOT EXISTS orders (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
-    order_date DATE NOT NULL,
+    order_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora del pedido en America/Lima',
 
     status_id BIGINT UNSIGNED NOT NULL COMMENT 'Estado del pedido; por defecto: pendiente',
 
@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS orders (
     notes TEXT NULL,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -467,7 +467,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     notes VARCHAR(255) NULL,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -528,7 +528,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     compartments TINYINT UNSIGNED NOT NULL,
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0',
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
@@ -649,7 +649,7 @@ CREATE TABLE IF NOT EXISTS media_files (
     created_by BIGINT UNSIGNED NOT NULL
         COMMENT 'User who uploaded the file; public form uses the system user',
 
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en TimeZone 0'
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima'
         COMMENT 'Last update date',
 
     updated_by BIGINT UNSIGNED NULL

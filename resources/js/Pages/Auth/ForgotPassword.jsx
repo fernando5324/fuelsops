@@ -1,55 +1,56 @@
-import InputError from '@/Components/InputError';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, useForm } from '@inertiajs/react';
+import React, { useEffect } from 'react';
+import { usePage, router } from '@inertiajs/react';
+import { Alert, App, Form, Input, Typography } from 'antd';
+import { MailOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
+import SubmitButton from '@/Components/SubmitButton';
+import AuthLayout from '@/Layouts/AuthLayout';
 
 export default function ForgotPassword({ status }) {
+    const { message } = App.useApp();
+    const { errors } = usePage().props;
     const { t } = useTranslations();
-    const { data, setData, post, processing, errors } = useForm({
-        email: '',
-    });
 
-    const submit = (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            message.error(Object.values(errors)[0]);
+        }
+    }, [errors, message]);
 
-        post(route('password.email'));
+    const onFinish = (values) => {
+        router.post(route('password.email'), values, {
+            onError: () => {},
+        });
     };
 
     return (
-        <GuestLayout>
-            <Head title={t('auth.forgot_password')} />
-
-            <div className="mb-4 text-sm text-gray-600">
+        <AuthLayout subtitle={t('auth.forgot_password')}>
+            <Typography.Paragraph type="secondary">
                 {t('auth.forgot_password_hint')}
-            </div>
+            </Typography.Paragraph>
 
             {status && (
-                <div className="mb-4 text-sm font-medium text-green-600">
-                    {status}
-                </div>
+                <Alert
+                    type="success"
+                    showIcon
+                    message={status}
+                    style={{ marginBottom: 16 }}
+                />
             )}
 
-            <form onSubmit={submit}>
-                <TextInput
-                    id="email"
-                    type="email"
+            <Form layout="vertical" onFinish={onFinish} autoComplete="off">
+                <Form.Item
                     name="email"
-                    value={data.email}
-                    className="mt-1 block w-full"
-                    isFocused={true}
-                    onChange={(e) => setData('email', e.target.value)}
-                />
+                    label={t('auth.email')}
+                    rules={[{ required: true, type: 'email', message: t('common.required') }]}
+                >
+                    <Input prefix={<MailOutlined />} placeholder={t('common.email_placeholder')} />
+                </Form.Item>
 
-                <InputError message={errors.email} className="mt-2" />
-
-                <div className="mt-4 flex items-center justify-end">
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        {t('auth.send_reset_link')}
-                    </PrimaryButton>
-                </div>
-            </form>
-        </GuestLayout>
+                <Form.Item>
+                    <SubmitButton block>{t('auth.send_reset_link')}</SubmitButton>
+                </Form.Item>
+            </Form>
+        </AuthLayout>
     );
 }

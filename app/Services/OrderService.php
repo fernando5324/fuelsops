@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -32,9 +33,18 @@ class OrderService
     {
         $customer = $this->resolveCustomer($data['customer'] ?? []);
 
-        $order = DB::transaction(function () use ($data, $customer) {
+        // Fecha del pedido: la fecha elegida con la hora de registro actual
+        // (America/Lima). Si no se envía fecha, se usa el momento actual.
+        $orderDate = $data['order_date'] ?? null;
+        if ($orderDate) {
+            $orderDate = Carbon::parse($orderDate)->setTimeFrom(now());
+        } else {
+            $orderDate = now();
+        }
+
+        $order = DB::transaction(function () use ($data, $customer, $orderDate) {
             $order = Order::create([
-                'order_date' => $data['order_date'] ?? now()->toDateString(),
+                'order_date' => $orderDate,
                 'status_id' => $this->pendingStatusId(),
                 'advisor_id' => $data['advisor_id'],
                 'customer_id' => $customer->id,

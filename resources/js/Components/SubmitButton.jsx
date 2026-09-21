@@ -14,7 +14,7 @@ import { useProcessing } from '@/hooks/useProcessing';
  *   children   — contenido del botón (texto).
  *   ...rest    — cualquier prop de antd Button (icon, size, type, etc.)
  */
-export default function SubmitButton({ permission, children, ...rest }) {
+export default function SubmitButton({ permission, loadingText, children, ...rest }) {
     const { can } = usePermissions();
     const { processing } = useProcessing();
 
@@ -27,7 +27,7 @@ export default function SubmitButton({ permission, children, ...rest }) {
             loading={processing}
             {...rest}
         >
-            {children}
+            {processing && loadingText ? loadingText : children}
         </Button>
     );
 }

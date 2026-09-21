@@ -72,8 +72,8 @@ INSERT IGNORE INTO vehicles (id, license_plate, type, is_active, is_deleted, cre
 -- ---------------------------------------------------------------------------
 
 INSERT IGNORE INTO orders (id, order_date, status_id, advisor_id, customer_id, driver_id, tanker_id, tractor_id, notes, created_by) VALUES
-    (1, CURRENT_DATE(), 1, 1, 1, 1, 1, 3, 'Pedido de muestra pendiente.',                                                      1),
-    (2, DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), 2, 2, 2, 2, 2, 4, 'Pedido de muestra atendido.',                             1);
+    (1, NOW(), 1, 1, 1, 1, 1, 3, 'Pedido de muestra pendiente.',                                                      1),
+    (2, DATE_SUB(NOW(), INTERVAL 1 DAY), 2, 2, 2, 2, 2, 4, 'Pedido de muestra atendido.',                             1);
 
 INSERT IGNORE INTO order_details (id, order_id, scop, plant_id, wholesaler_id, product_id, gallons, sale_price, compartments, created_by) VALUES
     (1, 1, 'SCOP-0001', 1, 1, 1, 500.00, 12.5000, 2, 1),

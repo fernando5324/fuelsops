@@ -13,11 +13,13 @@ import {
     Switch,
     Table,
     Tag,
+    Tooltip,
     Typography,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import PanelLayout from '../../../Layouts/PanelLayout';
 import useTranslations from '@/hooks/useTranslations';
+import formatDate from '@/lib/dates';
 import SubmitButton from '@/Components/SubmitButton';
 
 export default function CatalogsIndex({ config, rows, filter }) {
@@ -80,7 +82,7 @@ export default function CatalogsIndex({ config, rows, filter }) {
             return found ? found.label : (value ?? '-');
         }
         if (field.type === 'date') {
-            return value || '-';
+            return formatDate(value);
         }
         return value ?? '-';
     };
@@ -98,32 +100,33 @@ export default function CatalogsIndex({ config, rows, filter }) {
                       title: t('common.created_at'),
                       dataIndex: 'created_at',
                       width: 160,
-                      render: (v) => v || '-',
+                      render: (v) => formatDate(v),
                   },
               ]
             : []),
         {
             title: t('common.actions'),
-            width: 140,
+            width: 96,
+            align: 'center',
             render: (_, row) => (
-                <Space>
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => openEdit(row)}
-                    >
-                        {t('common.edit')}
-                    </Button>
-                    <Button
-                        type="link"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={() => confirmDelete(row)}
-                    >
-                        {t('common.delete')}
-                    </Button>
+                <Space size={0}>
+                    <Tooltip title={t('common.edit')}>
+                        <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            aria-label={t('common.edit')}
+                            onClick={() => openEdit(row)}
+                        />
+                    </Tooltip>
+                    <Tooltip title={t('common.delete')}>
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            aria-label={t('common.delete')}
+                            onClick={() => confirmDelete(row)}
+                        />
+                    </Tooltip>
                 </Space>
             ),
         },
@@ -175,14 +178,13 @@ export default function CatalogsIndex({ config, rows, filter }) {
     return (
         <PanelLayout title={config?.title || t('menus.catalogs')}>
             <Card
-                title={config?.title || t('menus.catalogs')}
                 extra={
                     <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                         {t('common.create_record')}
                     </Button>
                 }
             >
-                <Space style={{ marginBottom: 16 }}>
+                <Space style={{ marginBottom: 16, width: '100%' }}>
                     <Input.Search
                         allowClear
                         placeholder={t('common.search')}
@@ -192,7 +194,7 @@ export default function CatalogsIndex({ config, rows, filter }) {
                             router.get(`/catalogos/${resource}`, { q: v || undefined }, { preserveState: true, replace: true });
                         }}
                         enterButton={<SearchOutlined />}
-                        style={{ width: 280 }}
+                        className="ui-filter-search"
                     />
                 </Space>
 
@@ -201,6 +203,7 @@ export default function CatalogsIndex({ config, rows, filter }) {
                     dataSource={rows?.data || []}
                     columns={columns}
                     size="middle"
+                    scroll={{ x: 'max-content' }}
                     locale={{ emptyText: t('common.no_data') }}
                     pagination={{
                         current: rows?.current_page || 1,

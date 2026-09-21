@@ -46,4 +46,8 @@ return [
     'updated_at' => 'Actualizado el',
     'created_by' => 'Creado por',
     'updated_by' => 'Actualizado por',
+    'online' => 'En línea',
+    'offline' => 'Sin conexión',
+    'autocomplete' => 'Autocompletado',
+    'try_again' => 'Reintentar',
 ];

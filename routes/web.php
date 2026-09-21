@@ -47,6 +47,9 @@ Route::get('/', function () {
 Route::prefix('pedidos')->name('pedidos.')->group(function () {
     Route::get('registro', [PublicOrderController::class, 'create'])->name('registro');
     Route::post('registro', [PublicOrderController::class, 'store'])->name('registro.store');
+    Route::post('consulta-cliente', [PublicOrderController::class, 'lookupCustomer'])
+        ->middleware('throttle:30,1')
+        ->name('customer.lookup');
     Route::get('{order}/confirmado', [PublicOrderController::class, 'confirmed'])->name('confirmado');
 });
 
@@ -55,6 +58,7 @@ Route::middleware('auth')->group(function () {
 
     // Pedidos del panel
     Route::get('/pedidos', [OrderController::class, 'index'])->name('pedidos.index');
+    Route::get('/pedidos/{order}/detalle', [OrderApiController::class, 'detail'])->name('pedidos.detail');
     Route::get('/pedidos/{order}', [OrderController::class, 'show'])->name('pedidos.show');
     Route::post('/pedidos/{order}/estado', [OrderApiController::class, 'changeStatus'])->name('pedidos.status');
 

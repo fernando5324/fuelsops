@@ -14,11 +14,12 @@ import {
     ProductOutlined,
     TruckOutlined,
     CarOutlined,
+    HomeOutlined,
     TagsOutlined,
     TagOutlined,
-    HomeOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
+import logo from '../../images/logo.png';
 
 const { Sider, Header, Content } = Layout;
 
@@ -35,7 +36,9 @@ function iconFor(index) {
         8: TagsOutlined,
     };
 
-    return icons[index] || AppstoreOutlined;
+    const Icon = icons[index] || AppstoreOutlined;
+
+    return <Icon />;
 }
 
 export default function PanelLayout({ children, title }) {
@@ -68,11 +71,6 @@ export default function PanelLayout({ children, title }) {
             children: catalogLinks,
         },
         { key: 'usuarios', icon: <TeamOutlined />, label: <Link href="/usuarios">{t('menus.users')}</Link> },
-        {
-            key: 'profile',
-            icon: <UserOutlined />,
-            label: <Link href="/profile">{t('menus.profile')}</Link>,
-        },
     ];
 
     let selectedKey = 'dashboard';
@@ -82,8 +80,6 @@ export default function PanelLayout({ children, title }) {
         selectedKey = 'catalogos';
     } else if (path.startsWith('/usuarios')) {
         selectedKey = 'usuarios';
-    } else if (path.startsWith('/profile')) {
-        selectedKey = 'profile';
     }
 
     const userMenu = {
@@ -120,7 +116,7 @@ export default function PanelLayout({ children, title }) {
                     }}
                 >
                     <TagOutlined />
-                    Sertoco
+                    {import.meta.env.VITE_APP_NAME}
                 </div>
                 <Menu
                     theme="dark"
@@ -143,7 +139,7 @@ export default function PanelLayout({ children, title }) {
                     <Typography.Title level={4} style={{ margin: 0 }}>
                         {title}
                     </Typography.Title>
-                    <Dropdown menu={userMenu} placement="bottomRight">
+                    <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
                         <Space style={{ cursor: 'pointer' }}>
                             <Avatar icon={<UserOutlined />} />
                             <span>{user?.first_name || user?.name}</span>

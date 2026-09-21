@@ -10,9 +10,9 @@ misma carpeta.
 
 | Fase/Flujo | Estado |
 |------------|--------|
-| A. Base de datos y arquitectura | Completado: esquema, auditoría, estados, semillas, modelos Eloquent (Auditable/LogicalDelete), traducciones es y SQL-run implementados. Pendiente: revisión con datos reales (T-009) |
-| B. Formulario público           | Completado (verificado E2E por HTTP); pendiente anti-spam (T-031) pleno |
-| C. Panel interno (Ant Design)   | Completado: login/registro, layout, dashboard, pedidos, estado+historial, adjuntos, usuarios. Pendiente: perfil Breeze (T-050) |
+| A. Base de datos y arquitectura | Completado: esquema, auditoría, estados, semillas, modelos Eloquent (Auditable/LogicalDelete), traducciones es y SQL-run implementados. Pendiente: revisión con datos reales (T-009). Política de cambios: los esquemas se aplican directo sobre `sertocobd` y se reflejan en `database.sql` (SCHEMA_UPDATES.sql eliminado); restablecer la BD exige OK del usuario. `orders.order_date` es DATETIME (fecha + hora, America/Lima) |
+| B. Formulario público           | Completado (verificado E2E por HTTP); pendiente anti-spam (T-031) pleno. Rediseño ADR-006 aplicado y refinado: header público con logo + pill de conexión, **5 secciones exactas de la referencia** (Información general, Datos del chofer, Datos del vehículo, Detalle del pedido, Observaciones del pedido) con encabezados numerados y Resumen del pedido destacado (azul informativo + monto venta en naranja), CTA "Registrar pedido" con estado "Registrando pedido...", tabla de productos responsive (tabla desktop / tarjetas móvil) con numeración automática, eliminar por ícono + aria-label, `prefix="S/"` en precio, autocompletado licencia→conductor y RUC→cliente (`POST /pedidos/consulta-cliente`), scroll al primer error + `validation_summary` |
+| C. Panel interno (Ant Design)   | Completado: login/registro, layout, dashboard, pedidos, estado+historial, adjuntos, usuarios, perfil (solo accesible desde el dropdown del nombre, ya no en el menú) y auth legacy migrado a antd. Breeze/Tailwind eliminado. Fechas `dd/mm/yyyy` (pedidos con `hh:mm:ss`) en America/Lima. Rediseño ADR-006 aplicado y refinado: paleta institucional, logo real en el sidebar, acciones de tabla solo con íconos + Tooltip (Ver/Editar/Eliminar), filtros responsive y Drawer de inspección |
 | D. Catálogos y estados          | Completado: CRUD de los 9 módulos + activo/inactivo en el panel |
 | E. Validaciones y reglas        | Pendiente de confirmación con Sertoco |
 | F. Integraciones externas       | Backlog (futuro) |
@@ -239,6 +239,13 @@ Todo el panel autenticado se construye con Ant Design.
     - Fase: C
     - Dependencias: T-040
     - Criterio de aceptación: navegación a pedidos, catálogos y perfil.
+    - Nota 2026-09-19: bug visual de render en el menú lateral subsanado — los
+      íconos de los ítems de catálogo se pasaban como componentes forwardRef
+      (objeto `{$$typeof, render}`) en lugar de elementos JSX, lo que hacía
+      fallar todas las páginas del panel en cliente (`Objects are not valid as
+      a React child`). `iconFor()` ahora devuelve `<Icon />`. Verificado por
+      navegador headless real: login → `/panel` renderiza sin excepciones de
+      consola.
 
 - [x] T-044 — Dashboard del panel interno.
     - Prioridad: Media
@@ -286,13 +293,91 @@ Todo el panel autenticado se construye con Ant Design.
     - Referencias: `users` (is_owner, is_active)
     - Criterio de aceptación: alta/baja de usuarios y control de accesos.
 
-- [ ] T-050 — Migrar/portar páginas de perfil y auth al panel Ant Design.
+- [x] T-050 — Migrar/portar páginas de perfil y auth al panel Ant Design.
     - Prioridad: Baja
     - Fase: C
     - Dependencias: T-040
     - Criterio de aceptación: consistencia visual total del panel.
-      Nota: login y registro ya están en Ant Design; solo quedan las
-      páginas de perfil (Profile/Edit) con componentes Breeze.
+      Nota: perfil ya está en Ant Design; las últimas páginas Breeze
+      (verificación/recuperación/confirmación de contraseña) fueron migradas
+      a antd con `Layouts/AuthLayout.jsx` y se eliminó por completo el
+      código Breeze/Tailwind restante (layouts `GuestLayout`/
+      `AuthenticatedLayout`, `Pages/Dashboard.jsx` huérfano y los 12
+      componentes Breeze sin uso).
+
+---
+
+## C1. UI/UX — Rediseño de formulario público y panel (ADR-006)
+
+Rediseño integral según `docs/03_Decisions/ADR-006.md` (Aceptado e
+Implementado el 19-09-2026): paleta institucional, header público, 2 tarjetas
+en el formulario, panel con columnas de placas/galones/monto, filtros y Drawer
+de inspección. Sin cambios de esquema de BD: los totales se calculan con
+`withSum`.
+
+Iteración de rediseño del 21-09-2026 (T-054): el formulario público adoptó
+**exactamente las 5 secciones de la referencia** (Información general, Datos
+del chofer, Datos del vehículo, Detalle del pedido, Observaciones del pedido)
+con encabezados numerados, tabla de productos responsive (tabla en desktop /
+tarjetas en móvil), autocompletado conductor (licencia→nombre) y cliente
+(RUC→nombre vía endpoint público aditivo). Ver nota de implementación en
+`docs/03_Decisions/ADR-006.md` (sección 52).
+
+- [x] T-051 — Paleta y tokens de diseño globales (ADR-006).
+    - Prioridad: Alta
+    - Fase: C1 (ADR-006)
+    - Dependencias: ninguna
+    - Referencias: `resources/js/app.jsx`, `resources/css/app.css`, ADR-006
+    - Criterio de aceptación: `ConfigProvider` con primario `#1B3A6B`,
+      `colorBgLayout #F8FAFC`, `colorFillAlter #F1F5F9` (header de tablas),
+      `borderRadius 8`; clases `.ui-accent-btn`, `.ui-total`, `.ui-pill`,
+      `.ui-autocomplete-tag`. Verificado por build y navegador headless.
+
+- [x] T-052 — Header público y agrupación del formulario (ADR-006).
+    - Prioridad: Alta
+    - Fase: C1 (ADR-006)
+    - Dependencias: T-051
+    - Referencias: `resources/js/Components/PublicHeader.jsx`,
+      `resources/js/Pages/Public/Orders/{Create,Confirmed}.jsx`, ADR-006
+    - Criterio de aceptación: fondo `#F8FAFC`, header blanco con logo y pill
+      "En línea/Sin conexión"; formulario en 2 tarjetas (operación +
+      transporte + detalle de carga / observaciones 60% + resumen 40%);
+      tag "(Autocompletado)"; "+ Agregar fila" naranja secundario; submit
+      `.ui-accent-btn` centrado (máx. 400px). Montos en S/ (`es-PE`).
+      Verificado por headless a 375px sin desbordes.
+
+- [x] T-053 — Panel de pedidos: columnas, filtros y Drawer de inspección (ADR-006).
+    - Prioridad: Alta
+    - Fase: C1 (ADR-006)
+    - Dependencias: T-051
+    - Referencias: `resources/js/Pages/Platform/Orders/{Index,Show}.jsx`,
+      `resources/js/Components/OrderInspection.jsx`,
+      `app/Http/Controllers/Platform/Orders/{OrderController,OrderApiController}.php`,
+      `routes/web.php`, ADR-006
+    - Criterio de aceptación: columnas Cliente (RUC), Conductor con placas,
+      Galones y Monto Total (S/); badges por código (`pending`→ámbar,
+      `attended`→verde); filtros de búsqueda (RUC/cliente/placa), rango de
+      fechas y asesor; clic en fila abre un Drawer solo lectura alimentado
+      por el endpoint JSON nuevo `GET /pedidos/{order}/detalle`. La página
+      `Show` se conserva para el cambio de estado. Verificado por headless.
+
+- [x] T-054 — Formulario público: 5 secciones de la referencia + autocompletado.
+    - Prioridad: Alta
+    - Fase: C1 (ADR-006)
+    - Dependencias: T-051, T-052
+    - Referencias: `resources/js/Pages/Public/Orders/{Create,Confirmed}.jsx`,
+      `resources/js/Components/SectionCard.jsx`,
+      `app/Http/Controllers/Public/OrderController.php`, `routes/web.php`,
+      `resources/css/app.css`, `lang/es/order.php`, ADR-006 (sección 52)
+    - Criterio de aceptación: formulario con las 5 secciones exactas de la
+      referencia y encabezados numerados (1–5) + Resumen del pedido; Datos del
+      chofer con licencia (select buscable) que autocompleta el nombre;
+      cisterna/tracto como selects; tabla de productos con encabezado real en
+      desktop y tarjetas en móvil; RUC consulta `POST /pedidos/consulta-cliente`
+      (`throttle:30,1`) y autocompleta el cliente; tokens antd reactivados y
+      alineados con `:root`; página de confirmación con hero de éxito y resumen
+      en S/. Sin cambios de esquema ni de reglas de negocio. Verificado por
+      build y headless (375px/1280px, sin excepciones).
 
 ---
 

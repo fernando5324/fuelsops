@@ -1,56 +1,47 @@
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, useForm } from '@inertiajs/react';
+import React, { useEffect } from 'react';
+import { usePage, router } from '@inertiajs/react';
+import { App, Form, Input, Typography } from 'antd';
+import { LockOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
+import SubmitButton from '@/Components/SubmitButton';
+import AuthLayout from '@/Layouts/AuthLayout';
 
 export default function ConfirmPassword() {
+    const { message } = App.useApp();
+    const { errors } = usePage().props;
     const { t } = useTranslations();
-    const { data, setData, post, processing, errors, reset } = useForm({
-        password: '',
-    });
 
-    const submit = (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            message.error(Object.values(errors)[0]);
+        }
+    }, [errors, message]);
 
-        post(route('password.confirm'), {
-            onFinish: () => reset('password'),
+    const onFinish = (values) => {
+        router.post(route('password.confirm'), values, {
+            onError: () => {},
         });
     };
 
     return (
-        <GuestLayout>
-            <Head title={t('auth.confirm_password')} />
-
-            <div className="mb-4 text-sm text-gray-600">
+        <AuthLayout subtitle={t('auth.confirm_password')}>
+            <Typography.Paragraph type="secondary">
                 {t('auth.confirm_password_hint')}
-            </div>
+            </Typography.Paragraph>
 
-            <form onSubmit={submit}>
-                <div className="mt-4">
-                    <InputLabel htmlFor="password" value={t('auth.password_label')} />
+            <Form layout="vertical" onFinish={onFinish} autoComplete="off">
+                <Form.Item
+                    name="password"
+                    label={t('auth.password_label')}
+                    rules={[{ required: true, message: t('common.required') }]}
+                >
+                    <Input.Password prefix={<LockOutlined />} placeholder="••••••••" />
+                </Form.Item>
 
-                    <TextInput
-                        id="password"
-                        type="password"
-                        name="password"
-                        value={data.password}
-                        className="mt-1 block w-full"
-                        isFocused={true}
-                        onChange={(e) => setData('password', e.target.value)}
-                    />
-
-                    <InputError message={errors.password} className="mt-2" />
-                </div>
-
-                <div className="mt-4 flex items-center justify-end">
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        {t('common.confirm')}
-                    </PrimaryButton>
-                </div>
-            </form>
-        </GuestLayout>
+                <Form.Item>
+                    <SubmitButton block>{t('common.confirm')}</SubmitButton>
+                </Form.Item>
+            </Form>
+        </AuthLayout>
     );
 }

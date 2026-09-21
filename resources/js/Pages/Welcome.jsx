@@ -28,7 +28,7 @@ export default function Welcome({ auth, laravelVersion, phpVersion }) {
             <Card style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
                 <Space direction="vertical" size="large" style={{ width: '100%' }}>
                     <ApartmentOutlined
-                        style={{ fontSize: 64, color: '#1677ff' }}
+                        style={{ fontSize: 64, color: '#1B3A6B' }}
                     />
                     <Title level={2} style={{ margin: 0 }}>
                         {t('common.brand')}

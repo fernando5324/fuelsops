@@ -16,4 +16,5 @@ return [
     'profile' => 'Perfil',
     'settings' => 'Configuración',
     'reports' => 'Reportes',
+    'quick_access' => 'Accesos rápidos',
 ];

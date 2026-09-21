@@ -56,7 +56,6 @@ in the internal panel (Ant Design). See `ADR-004.md` and `05_Tasks/`.
 -   `database_design.md` --- Current database structure and
     relationships.
 -   `database.sql` --- Canonical schema (fresh install).
--   `SCHEMA_UPDATES.sql` --- Deltas to apply over an existing database.
 -   `SEEDS.sql` --- Idempotent test/seed data.
 -   `roadmap.md` --- Initial implementation roadmap.
 -   `ADR-001.md` --- Initial database design decisions.
@@ -81,7 +80,7 @@ business logic is provided by Sertoco.
 | Capa | Tecnología |
 |---|---|
 | Backend | Laravel 12, PHP 8.4 |
-| Base de datos | MySQL, SQL versionado (sin migraciones Laravel) |
+| Base de datos | MySQL, SQL versionado (sin migraciones Laravel; cambios aplicados directo a la BD y reflejados en `database.sql`) |
 | Admin Panel | React + Ant Design |
 | Infraestructura futura | Redis, S3/Spaces/R2, Workers, CDN |
 | Documentación | Markdown, ADR |
