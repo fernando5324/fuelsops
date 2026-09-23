@@ -10,6 +10,7 @@ and multiple order details.
 ## Main entities
 
 ``` text
+tenants
 advisors
 customers
 wholesalers
@@ -62,6 +63,37 @@ orders
   ▼
 order_files
 ```
+
+## Organizations (multi-tenant)
+
+The platform is organized by **organizations** (tenants). Every user account
+belongs to exactly one organization and can create accounts only within its
+own organization. All business information is routed by organization through
+the `tenant_id` column, which references `tenants.id`.
+
+Current rules:
+
+-   Each user is responsible for a single organization; internal users create
+    accounts only inside their assigned organization (`tenant_id` forced at
+    creation, ignoring any request input).
+-   Only the organization owner (`users.is_owner`) can create or mark other
+    owners; non-owners always create regular users.
+-   All business tables include `tenant_id` as a NOT NULL column with a
+    foreign key to `tenants`, except `users` where it is nullable (the system
+    user `sistema` does not belong to any organization). Every query is
+    filtered by the current organization at the application level.
+-   Uniqueness rules are **per organization**: RUC (customers), license
+    number (drivers), license plate (vehicles) and status code
+    (order_statuses) are unique within the tenant, so different organizations
+    may share the same values.
+-   `order_statuses` is an organization-level catalog: each tenant has its own
+    statuses (initially pending/attended/cancelled seeded for Sertoco).
+-   The main organization is **Sertoco** (id 1); all current seed data belongs
+    to it. End users do not notice that other organizations may exist (no
+    tenant switcher or tenant selector in the UI).
+-   The public order form and unauthenticated flows operate under the default
+    organization (Sertoco), resolved through `config/sertoco.php`
+    (`default_tenant_id`).
 
 ## Catalogs
 

@@ -3,14 +3,15 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Wholesaler extends Model
 {
-    use Auditable;
+    use Auditable, BelongsToTenant;
 
-    protected $fillable = ['name', 'is_active'];
+    protected $fillable = ['tenant_id', 'name', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

@@ -509,7 +509,7 @@ export default function TiptapEditor({ value, onChange, placeholder }) {
                 cancelText={t('tiptap.link_cancel')}
                 onOk={applyLink}
                 onCancel={() => setLinkModal(false)}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Input
                     placeholder="https://..."
@@ -527,7 +527,7 @@ export default function TiptapEditor({ value, onChange, placeholder }) {
                 cancelText={t('tiptap.image_cancel')}
                 onOk={applyImage}
                 onCancel={() => setImageModal(false)}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Space direction="vertical" style={{ width: '100%' }}>
                     <Input

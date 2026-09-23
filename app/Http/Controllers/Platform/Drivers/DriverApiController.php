@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers\Platform\Drivers;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasCrudActions;
 use App\Models\Driver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 
-class DriverApiController extends CatalogApiController
+class DriverApiController extends Controller
 {
+    use HasCrudActions;
+
     protected string $model = Driver::class;
 
-    protected bool $logicalDelete = true;
+    protected function logicalDelete(): bool
+    {
+        return true;
+    }
 
     protected function rules(?Model $entity = null): array
     {

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router, Link } from '@inertiajs/react';
+import { usePage, router } from '@inertiajs/react';
 import { App, Checkbox, Form, Input } from 'antd';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -50,10 +50,6 @@ export default function Login() {
                     <SubmitButton block>{t('auth.login')}</SubmitButton>
                 </Form.Item>
             </Form>
-
-            <div style={{ textAlign: 'center' }}>
-                <Link href="/register">{t('auth.register')}</Link>
-            </div>
         </AuthLayout>
     );
 }

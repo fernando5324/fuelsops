@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Services\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class OrderChangeStatusRequest extends FormRequest
 {
@@ -14,7 +16,7 @@ class OrderChangeStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status_id' => ['required', 'integer', 'exists:order_statuses,id'],
+            'status_id' => ['required', 'integer', Rule::exists('order_statuses', 'id')->where(fn ($query) => $query->where('tenant_id', TenantContext::id()))],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

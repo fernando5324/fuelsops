@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import {
     App,
     Button,
-    Card,
     Form,
     Input,
     InputNumber,
@@ -18,6 +17,8 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import PanelLayout from '../../../Layouts/PanelLayout';
+import PageHeader from '@/Components/PageHeader';
+import { catalogServices } from '@/Services';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import SubmitButton from '@/Components/SubmitButton';
@@ -32,8 +33,47 @@ export default function CatalogsIndex({ config, rows, filter }) {
     const [q, setQ] = useState(filter?.q || '');
 
     const resource = config?.resource;
+    const service = catalogServices[resource] || null;
+    const baseUrl = config?.url || service?.routes?.index || `/catalogos/${resource}`;
+    const storeUrl = service?.routes?.store || `/api/${resource}`;
     const fields = config?.fields || [];
     const options = config?.options || {};
+    const filterDefs = config?.filters || [];
+
+    const searchTimer = useRef(null);
+
+    const applied = {};
+    (filterDefs || []).forEach((f) => {
+        const v = filter?.[f.key];
+        if (v !== undefined && v !== null && v !== '') {
+            applied[f.key] = String(v);
+        }
+    });
+
+    useEffect(() => () => clearTimeout(searchTimer.current), []);
+
+    const navigate = (params) => {
+        router.get(baseUrl, params, { preserveState: true, replace: true });
+    };
+
+    const onSearchChange = (e) => {
+        const value = e.target.value ?? '';
+        setQ(value);
+        clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => {
+            navigate({ q: value.trim() || undefined, ...applied });
+        }, 350);
+    };
+
+    const onFilterChange = (key, value) => {
+        const next = { ...applied };
+        if (value === undefined || value === '') {
+            delete next[key];
+        } else {
+            next[key] = String(value);
+        }
+        navigate({ q: q.trim() || undefined, ...next });
+    };
 
     useEffect(() => {
         if (flash?.success) {
@@ -132,34 +172,38 @@ export default function CatalogsIndex({ config, rows, filter }) {
         },
     ];
 
+    const handleModalOpenChange = (opened) => {
+        if (!opened) return;
+        if (editing) {
+            const values = {};
+            fields.forEach((f) => {
+                values[f.key] = f.type === 'boolean' ? Boolean(editing[f.key]) : editing[f.key];
+            });
+            form.setFieldsValue(values);
+        } else {
+            form.resetFields();
+        }
+    };
+
     const openCreate = () => {
         setEditing(null);
-        form.resetFields();
         setOpen(true);
     };
 
     const openEdit = (row) => {
         setEditing(row);
-        const values = {};
-        fields.forEach((f) => {
-            values[f.key] = row[f.key];
-        });
-        form.setFieldsValue(values);
         setOpen(true);
     };
 
     const onFinish = (values) => {
-        const url = editing
-            ? `/catalogos/${resource}/${editing.id}`
-            : `/catalogos/${resource}`;
+        const url = editing ? `${storeUrl}/${editing.id}` : storeUrl;
+        const options = { preserveScroll: true, forceFormData: true, onSuccess: () => setOpen(false) };
 
-        const submit = editing ? router.put : router.post;
-
-        submit(url, values, {
-            preserveScroll: true,
-            forceFormData: true,
-            onSuccess: () => setOpen(false),
-        });
+        if (editing) {
+            router.put(url, values, options);
+        } else {
+            router.post(url, values, options);
+        }
     };
 
     const confirmDelete = (row) => {
@@ -170,32 +214,49 @@ export default function CatalogsIndex({ config, rows, filter }) {
             okType: 'danger',
             cancelText: t('common.cancel'),
             onOk: () => {
-                router.delete(`/catalogos/${resource}/${row.id}`, { preserveScroll: true });
+                router.delete(`${storeUrl}/${row.id}`, { preserveScroll: true });
             },
         });
     };
 
     return (
-        <PanelLayout title={config?.title || t('menus.catalogs')}>
-            <Card
+        <PanelLayout>
+            <PageHeader
+                title={config?.title || t('menus.catalogs')}
                 extra={
                     <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                         {t('common.create_record')}
                     </Button>
                 }
-            >
-                <Space style={{ marginBottom: 16, width: '100%' }}>
-                    <Input.Search
+            />
+            <div className="ui-list-section">
+                <Space wrap style={{ marginBottom: 16, width: '100%' }}>
+                    <Input
                         allowClear
                         placeholder={t('common.search')}
                         value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        onSearch={(v) => {
-                            router.get(`/catalogos/${resource}`, { q: v || undefined }, { preserveState: true, replace: true });
-                        }}
-                        enterButton={<SearchOutlined />}
+                        onChange={onSearchChange}
+                        prefix={<SearchOutlined />}
                         className="ui-filter-search"
                     />
+                    {(filterDefs || []).map((f) => (
+                        <Select
+                            key={f.key}
+                            allowClear
+                            placeholder={f.type === 'boolean' ? t('common.all_statuses') : t(f.label)}
+                            value={applied[f.key]}
+                            onChange={(v) => onFilterChange(f.key, v)}
+                            className={f.type === 'select' ? 'ui-filter-advisor' : 'ui-filter-status'}
+                            options={
+                                f.type === 'boolean'
+                                    ? [
+                                          { value: '1', label: t('common.active') },
+                                          { value: '0', label: t('common.inactive') },
+                                      ]
+                                    : options[f.options] || []
+                            }
+                        />
+                    ))}
                 </Space>
 
                 <Table
@@ -212,14 +273,14 @@ export default function CatalogsIndex({ config, rows, filter }) {
                         showTotal: (total) => `${total} ${t('common.records_found')}`,
                         onChange: (page) => {
                             router.get(
-                                `/catalogos/${resource}`,
+                                baseUrl,
                                 { ...filter, page },
                                 { preserveState: true },
                             );
                         },
                     }}
                 />
-            </Card>
+            </div>
 
             <Modal
                 title={editing ? t('common.edit_record') : t('common.create_record')}
@@ -233,8 +294,9 @@ export default function CatalogsIndex({ config, rows, filter }) {
                         {t('common.save')}
                     </SubmitButton>,
                 ]}
-                destroyOnClose
-                maskClosable={false}
+                destroyOnHidden
+                mask={{ closable: false }}
+                afterOpenChange={handleModalOpenChange}
             >
                 <Form form={form} layout="vertical" onFinish={onFinish}>
                     {fields

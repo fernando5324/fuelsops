@@ -9,6 +9,7 @@ import {
     UserOutlined,
 } from '@ant-design/icons';
 import PanelLayout from '../../Layouts/PanelLayout';
+import PageHeader from '@/Components/PageHeader';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 
@@ -61,7 +62,8 @@ export default function Dashboard({ statuses, counts, total_orders, recent }) {
     ];
 
     return (
-        <PanelLayout title={t('menus.dashboard')}>
+        <PanelLayout>
+            <PageHeader title={t('menus.dashboard')} />
             <Row gutter={[16, 16]}>
                 <Col xs={24} sm={12} lg={6}>
                     <Card>
@@ -105,7 +107,10 @@ export default function Dashboard({ statuses, counts, total_orders, recent }) {
                 </Row>
             </Card>
 
-            <Card title={t('order.recent_orders')} style={{ marginTop: 16 }}>
+            <div className="ui-list-section" style={{ marginTop: 16 }}>
+                <Typography.Title level={5} style={{ marginTop: 0 }}>
+                    {t('order.recent_orders')}
+                </Typography.Title>
                 <Table
                     rowKey="id"
                     dataSource={recent || []}
@@ -115,7 +120,7 @@ export default function Dashboard({ statuses, counts, total_orders, recent }) {
                     scroll={{ x: 'max-content' }}
                     locale={{ emptyText: t('common.no_data') }}
                 />
-            </Card>
+            </div>
         </PanelLayout>
     );
 }

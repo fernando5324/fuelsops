@@ -3,6 +3,8 @@ import { usePage, router, Link } from '@inertiajs/react';
 import { App, Button, Card, Input, Select, Space, Tag, Timeline, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import PanelLayout from '../../../Layouts/PanelLayout';
+import PageHeader from '@/Components/PageHeader';
+import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import SubmitButton from '@/Components/SubmitButton';
 import OrderInspection from '@/Components/OrderInspection';
@@ -25,12 +27,15 @@ export default function OrdersShow({ order, totals, statuses }) {
     const history = order?.status_history || [];
 
     return (
-        <PanelLayout title={`${t('order.order_detail')} #${order?.id}`}>
-            <Space style={{ marginBottom: 16 }}>
-                <Link href="/pedidos">
-                    <Button icon={<ArrowLeftOutlined />}>{t('common.back')}</Button>
-                </Link>
-            </Space>
+        <PanelLayout>
+            <PageHeader
+                title={`${t('order.order_detail')} #${order?.id}`}
+                extra={
+                    <Link href={Orders.routes.index}>
+                        <Button icon={<ArrowLeftOutlined />}>{t('common.back')}</Button>
+                    </Link>
+                }
+            />
 
             <Card
                 title={
@@ -57,7 +62,7 @@ export default function OrdersShow({ order, totals, statuses }) {
                         disabled={!statusId}
                         onClick={() =>
                             router.post(
-                                `/pedidos/${order.id}/estado`,
+                                Orders.routes.changeStatus(order.id),
                                 { status_id: statusId, notes },
                                 { preserveScroll: true },
                             )

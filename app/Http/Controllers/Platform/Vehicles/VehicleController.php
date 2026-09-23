@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Platform\Vehicles;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasIndexPage;
 use App\Models\Vehicle;
 
-class VehicleController extends CatalogController
+class VehicleController extends Controller
 {
+    use HasIndexPage;
+
     protected string $model = Vehicle::class;
 
     protected string $resource = 'vehicles';
@@ -14,6 +17,11 @@ class VehicleController extends CatalogController
     protected string $titleKey = 'menus.vehicles';
 
     protected array $searchable = ['license_plate'];
+
+    protected array $filters = [
+        ['key' => 'type', 'label' => 'catalogs.vehicle_type', 'type' => 'select', 'options' => 'vehicle_types'],
+        ['key' => 'is_active', 'label' => 'common.active', 'type' => 'boolean'],
+    ];
 
     protected array $fields = [
         ['key' => 'license_plate', 'label' => 'catalogs.license_plate', 'type' => 'text', 'required' => true],
@@ -29,5 +37,14 @@ class VehicleController extends CatalogController
                 ['value' => Vehicle::TYPE_TRACTOR, 'label' => __('catalogs.type_tractor')],
             ],
         ];
+    }
+
+    /**
+     * La URL web es el segmento en español (ADR-003), distinto del
+     * `$resource` interno en inglés.
+     */
+    protected function pageUrl(): string
+    {
+        return '/catalogos/vehiculos';
     }
 }

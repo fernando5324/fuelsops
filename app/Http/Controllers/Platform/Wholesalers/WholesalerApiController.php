@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Platform\Wholesalers;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasCrudActions;
 use App\Models\Wholesaler;
 use Illuminate\Database\Eloquent\Model;
 
-class WholesalerApiController extends CatalogApiController
+class WholesalerApiController extends Controller
 {
+    use HasCrudActions;
+
     protected string $model = Wholesaler::class;
 
     protected function rules(?Model $entity = null): array

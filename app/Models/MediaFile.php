@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogicalDelete;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -14,11 +15,12 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class MediaFile extends Model
 {
-    use Auditable, LogicalDelete;
+    use Auditable, BelongsToTenant, LogicalDelete;
 
     protected $table = 'media_files';
 
     protected $fillable = [
+        'tenant_id',
         'model_type',
         'model_id',
         'disk',

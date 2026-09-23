@@ -15,6 +15,7 @@ use App\Models\Wholesaler;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class OrderController extends Controller
@@ -26,8 +27,6 @@ class OrderController extends Controller
             'plants' => Plant::where('is_active', 1)->orderBy('name')->get(['id', 'name']),
             'wholesalers' => Wholesaler::where('is_active', 1)->orderBy('name')->get(['id', 'name']),
             'products' => Product::where('is_active', 1)->orderBy('name')->get(['id', 'name']),
-            'drivers' => Driver::where('is_active', 1)->orderBy('name')->get(['id', 'name', 'license_number']),
-            'vehicles' => Vehicle::where('is_active', 1)->orderBy('license_plate')->get(['id', 'license_plate', 'type']),
         ]);
     }
 
@@ -58,6 +57,53 @@ class OrderController extends Controller
         return response()->json([
             'found' => (bool) $customer,
             'name' => $customer?->name,
+        ]);
+    }
+
+    /**
+     * Consulta aditiva para el formulario público: dado un número de licencia,
+     * devuelve el chofer registrado (si existe y está activo) para
+     * autocompletar el nombre. Limitada por throttle en la ruta.
+     */
+    public function lookupDriver(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'license_number' => ['required', 'string', 'max:50'],
+        ]);
+
+        $driver = Driver::query()
+            ->where('license_number', trim($data['license_number']))
+            ->where('is_active', 1)
+            ->first(['id', 'name']);
+
+        return response()->json([
+            'found' => (bool) $driver,
+            'id' => $driver?->id,
+            'name' => $driver?->name,
+        ]);
+    }
+
+    /**
+     * Consulta aditiva para el formulario público: dado una placa y un tipo,
+     * devuelve el vehículo registrado (si existe y está activo) para
+     * confirmar el campo. Limitada por throttle en la ruta.
+     */
+    public function lookupVehicle(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'license_plate' => ['required', 'string', 'max:20'],
+            'type' => ['required', Rule::in([Vehicle::TYPE_TANKER, Vehicle::TYPE_TRACTOR])],
+        ]);
+
+        $vehicle = Vehicle::query()
+            ->where('license_plate', strtoupper(trim($data['license_plate'])))
+            ->where('type', $data['type'])
+            ->where('is_active', 1)
+            ->first(['id', 'license_plate']);
+
+        return response()->json([
+            'found' => (bool) $vehicle,
+            'id' => $vehicle?->id,
         ]);
     }
 

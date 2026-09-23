@@ -379,7 +379,7 @@ export default function PageContentEditor({ value, onChange, placeholder, pageOp
                 cancelText={t('tiptap.link_cancel')}
                 onOk={applyLink}
                 onCancel={() => setLinkModal(false)}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Space direction="vertical" style={{ width: '100%' }}>
                     <Segmented
@@ -432,7 +432,7 @@ export default function PageContentEditor({ value, onChange, placeholder, pageOp
                 cancelText={t('tiptap.image_cancel')}
                 onOk={applyImage}
                 onCancel={() => setImageModal(false)}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Space direction="vertical" style={{ width: '100%' }}>
                     <Input

@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Platform\OrderStatuses;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasCrudActions;
 use App\Models\OrderStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 
-class OrderStatusApiController extends CatalogApiController
+class OrderStatusApiController extends Controller
 {
+    use HasCrudActions;
+
     protected string $model = OrderStatus::class;
 
     protected function rules(?Model $entity = null): array

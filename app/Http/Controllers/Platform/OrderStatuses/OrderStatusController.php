@@ -2,18 +2,25 @@
 
 namespace App\Http\Controllers\Platform\OrderStatuses;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasIndexPage;
 use App\Models\OrderStatus;
 
-class OrderStatusController extends CatalogController
+class OrderStatusController extends Controller
 {
+    use HasIndexPage;
+
     protected string $model = OrderStatus::class;
 
-    protected string $resource = 'order-statuses';
+    protected string $resource = 'estados';
 
     protected string $titleKey = 'menus.order_statuses';
 
     protected array $searchable = ['code', 'name'];
+
+    protected array $filters = [
+        ['key' => 'is_active', 'label' => 'common.active', 'type' => 'boolean'],
+    ];
 
     protected array $fields = [
         ['key' => 'code', 'label' => 'catalogs.code', 'type' => 'text', 'required' => true],

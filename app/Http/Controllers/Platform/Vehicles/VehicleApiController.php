@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers\Platform\Vehicles;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasCrudActions;
 use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 
-class VehicleApiController extends CatalogApiController
+class VehicleApiController extends Controller
 {
+    use HasCrudActions;
+
     protected string $model = Vehicle::class;
 
-    protected bool $logicalDelete = true;
+    protected function logicalDelete(): bool
+    {
+        return true;
+    }
 
     protected function rules(?Model $entity = null): array
     {

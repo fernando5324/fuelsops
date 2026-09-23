@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Descriptions, Space, Table, Tag, Typography } from 'antd';
 import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
+import Media from '@/Services/Media';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
@@ -149,7 +150,7 @@ export default function OrderInspection({ order, totals, showFiles = true }) {
                                         <Button
                                             type="link"
                                             icon={<DownloadOutlined />}
-                                            href={`/archivos/${f.id}/descargar`}
+                                            href={Media.routes.download(f.id)}
                                         >
                                             {t('common.download')}
                                         </Button>

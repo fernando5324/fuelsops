@@ -23,7 +23,9 @@ export default function PublicHeader() {
 
     return (
         <header className="ui-public-header">
-            <img key={logo} src={logo} alt={t('common.brand')} />
+            <span className="ui-header-logo">
+                <img key={logo} src={logo} alt={t('common.brand')} />
+            </span>
             <span className={`ui-pill ${online ? 'ui-pill--online' : 'ui-pill--offline'}`}>
                 <span className="ui-pill-dot" />
                 {online ? t('common.online') : t('common.offline')}

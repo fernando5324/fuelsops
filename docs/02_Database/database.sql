@@ -4,9 +4,31 @@ SET
 
 USE sertocobd;
 
+CREATE TABLE tenants (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT UNSIGNED NULL,
+    name VARCHAR(150) NOT NULL,
+    slug VARCHAR(180) NOT NULL,
+    legal_name VARCHAR(200) NULL,
+    tax_id VARCHAR(30) NULL,
+    email VARCHAR(150) NULL,
+    phone VARCHAR(30) NULL,
+    website VARCHAR(255) NULL,
+    logo_media_file_id BIGINT UNSIGNED NULL,
+    status ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT UNSIGNED NULL,
+    updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    updated_by BIGINT UNSIGNED NULL,
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_tenants_slug (slug),
+    KEY idx_tenants_status (status),
+    KEY idx_tenants_account (account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS users (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        tenant_id BIGINT UNSIGNED NULL,
         name VARCHAR(100) NOT NULL,
         first_name VARCHAR(100) NOT NULL,
         last_name VARCHAR(100) NULL,
@@ -23,7 +45,10 @@ updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en Amer
         updated_by BIGINT UNSIGNED NULL,
         is_deleted TINYINT (1) NOT NULL DEFAULT 0,
         UNIQUE KEY uk_users_email (email),
-        KEY idx_users_active (is_active)
+        KEY idx_users_active (is_active),
+        UNIQUE KEY uk_users_tenant_email (tenant_id, email),
+        KEY idx_users_tenant (tenant_id),
+        CONSTRAINT fk_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON UPDATE CASCADE ON DELETE RESTRICT
     ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 
@@ -98,6 +123,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE TABLE IF NOT EXISTS advisors (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(150) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -107,6 +133,7 @@ CREATE TABLE IF NOT EXISTS advisors (
     updated_by BIGINT UNSIGNED NULL,
 
     INDEX idx_advisors_active (is_active),
+    INDEX idx_advisors_tenant (tenant_id),
     INDEX idx_advisors_created_by (created_by),
     INDEX idx_advisors_updated_by (updated_by),
 
@@ -120,6 +147,12 @@ CREATE TABLE IF NOT EXISTS advisors (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_advisors_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -128,6 +161,7 @@ CREATE TABLE IF NOT EXISTS advisors (
 
 CREATE TABLE IF NOT EXISTS wholesalers (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(150) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -137,6 +171,7 @@ CREATE TABLE IF NOT EXISTS wholesalers (
     updated_by BIGINT UNSIGNED NULL,
 
     INDEX idx_wholesalers_active (is_active),
+    INDEX idx_wholesalers_tenant (tenant_id),
     INDEX idx_wholesalers_created_by (created_by),
     INDEX idx_wholesalers_updated_by (updated_by),
 
@@ -150,6 +185,12 @@ CREATE TABLE IF NOT EXISTS wholesalers (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesalers_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -158,6 +199,7 @@ CREATE TABLE IF NOT EXISTS wholesalers (
 
 CREATE TABLE IF NOT EXISTS plants (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(150) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -167,6 +209,7 @@ CREATE TABLE IF NOT EXISTS plants (
     updated_by BIGINT UNSIGNED NULL,
 
     INDEX idx_plants_active (is_active),
+    INDEX idx_plants_tenant (tenant_id),
     INDEX idx_plants_created_by (created_by),
     INDEX idx_plants_updated_by (updated_by),
 
@@ -180,6 +223,12 @@ CREATE TABLE IF NOT EXISTS plants (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_plants_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -188,6 +237,7 @@ CREATE TABLE IF NOT EXISTS plants (
 
 CREATE TABLE IF NOT EXISTS products (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(150) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -197,6 +247,7 @@ CREATE TABLE IF NOT EXISTS products (
     updated_by BIGINT UNSIGNED NULL,
 
     INDEX idx_products_active (is_active),
+    INDEX idx_products_tenant (tenant_id),
     INDEX idx_products_created_by (created_by),
     INDEX idx_products_updated_by (updated_by),
 
@@ -210,6 +261,12 @@ CREATE TABLE IF NOT EXISTS products (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_products_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -218,6 +275,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE TABLE IF NOT EXISTS customers (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     tax_id VARCHAR(20) NOT NULL,
     name VARCHAR(200) NOT NULL,
 
@@ -231,9 +289,10 @@ CREATE TABLE IF NOT EXISTS customers (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_customers_tax_id (tax_id),
+    UNIQUE KEY uq_customers_tenant_tax_id (tenant_id, tax_id),
 
     INDEX idx_customers_name (name),
+    INDEX idx_customers_tenant (tenant_id),
     INDEX idx_customers_preferred_wholesaler (preferred_wholesaler_id),
     INDEX idx_customers_active (is_active),
     INDEX idx_customers_created_by (created_by),
@@ -255,6 +314,12 @@ CREATE TABLE IF NOT EXISTS customers (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_customers_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -263,6 +328,7 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE TABLE IF NOT EXISTS drivers (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     license_number VARCHAR(50) NOT NULL,
     name VARCHAR(200) NOT NULL,
 
@@ -274,9 +340,10 @@ CREATE TABLE IF NOT EXISTS drivers (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_drivers_license_number (license_number),
+    UNIQUE KEY uq_drivers_tenant_license (tenant_id, license_number),
 
     INDEX idx_drivers_name (name),
+    INDEX idx_drivers_tenant (tenant_id),
     INDEX idx_drivers_active (is_active),
     INDEX idx_drivers_created_by (created_by),
     INDEX idx_drivers_updated_by (updated_by),
@@ -291,6 +358,12 @@ CREATE TABLE IF NOT EXISTS drivers (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_drivers_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -299,6 +372,7 @@ CREATE TABLE IF NOT EXISTS drivers (
 
 CREATE TABLE IF NOT EXISTS vehicles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
 
     license_plate VARCHAR(20) NOT NULL,
 
@@ -312,9 +386,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_vehicles_license_plate (license_plate),
+    UNIQUE KEY uq_vehicles_tenant_plate (tenant_id, license_plate),
 
     INDEX idx_vehicles_type (type),
+    INDEX idx_vehicles_tenant (tenant_id),
     INDEX idx_vehicles_active (is_active),
     INDEX idx_vehicles_created_by (created_by),
     INDEX idx_vehicles_updated_by (updated_by),
@@ -329,6 +404,12 @@ CREATE TABLE IF NOT EXISTS vehicles (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_vehicles_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -337,6 +418,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 
 CREATE TABLE IF NOT EXISTS order_statuses (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
     description VARCHAR(255) NULL,
@@ -350,8 +432,9 @@ CREATE TABLE IF NOT EXISTS order_statuses (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_order_statuses_code (code),
+    UNIQUE KEY uq_order_statuses_tenant_code (tenant_id, code),
     INDEX idx_order_statuses_default (is_default),
+    INDEX idx_order_statuses_tenant (tenant_id),
     INDEX idx_order_statuses_active (is_active),
     INDEX idx_order_statuses_created_by (created_by),
     INDEX idx_order_statuses_updated_by (updated_by),
@@ -366,6 +449,12 @@ CREATE TABLE IF NOT EXISTS order_statuses (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_statuses_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -374,6 +463,7 @@ CREATE TABLE IF NOT EXISTS order_statuses (
 
 CREATE TABLE IF NOT EXISTS orders (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
 
     order_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora del pedido en America/Lima',
 
@@ -396,6 +486,7 @@ CREATE TABLE IF NOT EXISTS orders (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
 
     INDEX idx_orders_date (order_date),
+    INDEX idx_orders_tenant (tenant_id),
     INDEX idx_orders_status (status_id),
     INDEX idx_orders_advisor (advisor_id),
     INDEX idx_orders_customer (customer_id),
@@ -451,6 +542,12 @@ CREATE TABLE IF NOT EXISTS orders (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_orders_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -459,6 +556,7 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE TABLE IF NOT EXISTS order_status_history (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
 
     order_id BIGINT UNSIGNED NOT NULL,
     status_id BIGINT UNSIGNED NOT NULL,
@@ -472,6 +570,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     updated_by BIGINT UNSIGNED NULL,
 
     INDEX idx_order_status_history_order (order_id),
+    INDEX idx_osh_tenant (tenant_id),
     INDEX idx_order_status_history_status (status_id),
     INDEX idx_order_status_history_previous (previous_status_id),
     INDEX idx_order_status_history_created_by (created_by),
@@ -505,6 +604,12 @@ CREATE TABLE IF NOT EXISTS order_status_history (
         FOREIGN KEY (updated_by)
         REFERENCES users (id)
         ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_osh_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -513,6 +618,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
 
 CREATE TABLE IF NOT EXISTS order_details (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
 
     order_id BIGINT UNSIGNED NOT NULL,
 
@@ -535,6 +641,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
 
     INDEX idx_order_details_order (order_id),
+    INDEX idx_order_details_tenant (tenant_id),
     INDEX idx_order_details_plant (plant_id),
     INDEX idx_order_details_wholesaler (wholesaler_id),
     INDEX idx_order_details_product (product_id),
@@ -577,6 +684,12 @@ CREATE TABLE IF NOT EXISTS order_details (
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
 
+    CONSTRAINT fk_order_details_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
     CONSTRAINT chk_order_details_gallons
         CHECK (gallons > 0),
 
@@ -590,97 +703,54 @@ CREATE TABLE IF NOT EXISTS order_details (
 
 -- 12. ORDER FILES
 
-CREATE TABLE IF NOT EXISTS media_files (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY
-        COMMENT 'Unique file identifier',
-
-    model_type VARCHAR(50) NOT NULL
-        COMMENT 'Related entity type',
-
-    model_id BIGINT UNSIGNED NOT NULL
-        COMMENT 'ID of the related record',
-
-    disk VARCHAR(50) NOT NULL DEFAULT 'public'
-        COMMENT 'Storage disk or provider',
-
-    directory VARCHAR(255) NOT NULL
-        COMMENT 'Directory where the file is stored',
-
-    file_name VARCHAR(255) NOT NULL
-        COMMENT 'Physical file name',
-
-    extension VARCHAR(10) NOT NULL
-        COMMENT 'File extension',
-
-    mime_type VARCHAR(100) NOT NULL
-        COMMENT 'File MIME type',
-
-    file_type ENUM(
-        'image',
-        'document',
-        'other'
-    ) NOT NULL DEFAULT 'document'
-        COMMENT 'General file category',
-
-    file_size BIGINT UNSIGNED NOT NULL
-        COMMENT 'File size in bytes',
-
-    width INT UNSIGNED NULL
-        COMMENT 'Image width in pixels',
-
-    height INT UNSIGNED NULL
-        COMMENT 'Image height in pixels',
-
-    hash CHAR(64) NULL
-        COMMENT 'SHA-256 hash for duplicate detection',
-
-    visibility ENUM(
-        'public',
-        'private'
-    ) NOT NULL DEFAULT 'private'
-        COMMENT 'File visibility',
-
-    original_name VARCHAR(255) NULL
-        COMMENT 'Original file name when uploaded',
-
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
-        COMMENT 'Creation date',
-
-    created_by BIGINT UNSIGNED NOT NULL
-        COMMENT 'User who uploaded the file; public form uses the system user',
-
-    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima'
-        COMMENT 'Last update date',
-
-    updated_by BIGINT UNSIGNED NULL
-        COMMENT 'User who last updated the file',
-
-    is_deleted TINYINT(1) NOT NULL DEFAULT 0
-        COMMENT 'Logical deletion flag',
-
+CREATE TABLE media_files (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador único del archivo',
+    tenant_id BIGINT UNSIGNED NOT NULL COMMENT 'Tenant propietario del archivo',
+    model_type VARCHAR(50) NOT NULL COMMENT 'Tabla o entidad relacionada',
+    model_id BIGINT UNSIGNED NOT NULL COMMENT 'ID del registro relacionado',
+    disk VARCHAR(50) NOT NULL DEFAULT 'public' COMMENT 'Disco o proveedor de almacenamiento',
+    directory VARCHAR(255) NOT NULL COMMENT 'Directorio donde se almacena el archivo',
+    folder VARCHAR(100) NULL COMMENT 'Carpeta lógica mostrada al usuario',
+    file_name VARCHAR(255) NOT NULL COMMENT 'Nombre físico del archivo',
+    extension VARCHAR(10) NOT NULL COMMENT 'Extensión del archivo',
+    mime_type VARCHAR(100) NOT NULL COMMENT 'Tipo MIME del archivo',
+    file_type ENUM('image','document','video','audio','other') NOT NULL DEFAULT 'image' COMMENT 'Categoría general del archivo',
+    file_size BIGINT UNSIGNED NOT NULL COMMENT 'Tamaño del archivo en bytes',
+    width INT UNSIGNED NULL COMMENT 'Ancho en píxeles',
+    height INT UNSIGNED NULL COMMENT 'Alto en píxeles',
+    hash CHAR(64) NULL COMMENT 'Hash SHA-256 para detectar archivos duplicados',
+    visibility ENUM('public','private') NOT NULL DEFAULT 'public' COMMENT 'Visibilidad del archivo',
+    alt_text VARCHAR(255) NULL COMMENT 'Texto alternativo para accesibilidad y SEO',
+    original_name VARCHAR(255) NULL COMMENT 'Nombre original del archivo al momento de la carga',
+    title VARCHAR(255) NULL COMMENT 'Título descriptivo del archivo',
+    description TEXT NULL COMMENT 'Descripción opcional del archivo',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación del registro',
+    created_by BIGINT UNSIGNED NULL COMMENT 'Usuario que registró el archivo',
+    updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha de la última actualización',
+    updated_by BIGINT UNSIGNED NULL COMMENT 'Usuario que realizó la última actualización',
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Indica si el registro fue eliminado lógicamente',
+    KEY idx_media_tenant (tenant_id),
     KEY idx_media_model (model_type, model_id),
     KEY idx_media_hash (hash),
     KEY idx_media_type (file_type),
     KEY idx_media_visibility (visibility),
-    KEY idx_media_deleted (is_deleted),
-
+    CONSTRAINT fk_media_files_tenant
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
     CONSTRAINT fk_media_files_created_by
-        FOREIGN KEY (created_by)
-        REFERENCES users (id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT,
-
+        FOREIGN KEY (created_by) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
     CONSTRAINT fk_media_files_updated_by
-        FOREIGN KEY (updated_by)
-        REFERENCES users (id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT
+        FOREIGN KEY (updated_by) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Repositorio centralizado de archivos multimedia del sistema';
 
-) ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_unicode_ci
-COMMENT='Centralized repository for system files';
 
+ALTER TABLE tenants
+ADD CONSTRAINT fk_tenants_logo_media
+    FOREIGN KEY (logo_media_file_id) REFERENCES media_files(id)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL;
 
 -- PROVISIONAL ORDER CALCULATIONS
 --
@@ -703,9 +773,26 @@ COMMENT='Centralized repository for system files';
 -- SEEDS
 --
 
+-- Organización principal. Toda la data de arranque pertenece a "Sertoco".
+-- Las organizaciones aíslan la información (multi-tenant, tenant_id) y el
+-- usuario no percibe la existencia de otras.
+
+INSERT INTO tenants (id, account_id, name, slug, legal_name, tax_id, email, phone, website, logo_media_file_id, status, created_by)
+VALUES (1, NULL, 'Sertoco', 'sertoco', 'Sertoco S.A.C.', '20560398630', 'contacto@sertoco.pe', NULL, NULL, NULL, 'active', 999999);
+
+
+-- Main platform user (owner of the Sertoco organization).
+-- Password hash de prueba: 'password'. Solo este usuario (is_owner = 1) y los
+-- que él designe pueden crear/marcar dueños dentro de su organización.
+
+INSERT INTO users (id, tenant_id, name, first_name, last_name, email, password, remember_token, is_owner, is_active, created_by)
+VALUES (1, 1, 'sistema', 'Alejandro', 'Baltazar', 'lfbaltazarv@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '', 1, 1, 999999);
+
+
 -- System user used by the public form, seeded catalogs and system changes.
 -- The password is intentionally empty; this user must never authenticate.
 -- It uses a high id (999999) so regular users start from small ids.
+-- No pertenece a ninguna organización (tenant_id NULL).
 
 INSERT INTO users (id, name, first_name, last_name, email, password, remember_token, is_owner, is_active, created_by)
 VALUES (999999, 'sistema', 'Sistema', NULL, 'sistema@sertoco.local', '', '', 0, 1, 999999);
@@ -714,9 +801,10 @@ VALUES (999999, 'sistema', 'Sistema', NULL, 'sistema@sertoco.local', '', '', 0, 
 -- Initial order statuses.
 -- pendiente is the default status assigned to orders registered through the
 -- public form. New statuses can be added to this catalog later.
+-- Los estados pertenecen a cada organización (aquí, a Sertoco).
 
-INSERT INTO order_statuses (id, code, name, description, color, is_default, is_active, created_by)
+INSERT INTO order_statuses (id, tenant_id, code, name, description, color, is_default, is_active, created_by)
 VALUES
-    (1, 'pending', 'Pendiente', 'Pedido registrado desde el formulario público, pendiente de atención.', 'orange', 1, 1, 999999),
-    (2, 'attended', 'Atendido', 'Pedido atendido por Sertoco.', 'green', 0, 1, 999999),
-    (3, 'cancelled', 'Anulado', 'Pedido anulado.', 'red', 0, 1, 999999);
+    (1, 1, 'pending', 'Pendiente', 'Pedido registrado desde el formulario público, pendiente de atención.', 'orange', 1, 1, 999999),
+    (2, 1, 'attended', 'Atendido', 'Pedido atendido por Sertoco.', 'green', 0, 1, 999999),
+    (3, 1, 'cancelled', 'Anulado', 'Pedido anulado.', 'red', 0, 1, 999999);

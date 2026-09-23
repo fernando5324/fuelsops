@@ -59,9 +59,6 @@ export default function Welcome({ auth, laravelVersion, phpVersion }) {
                                         {t('auth.login')}
                                     </Button>
                                 </Link>
-                                <Link href={route('register')}>
-                                    <Button size="large">{t('auth.register')}</Button>
-                                </Link>
                             </Space>
                         )}
                     </div>

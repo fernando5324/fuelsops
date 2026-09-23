@@ -3,15 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogicalDelete;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrderDetail extends Model
 {
-    use Auditable, LogicalDelete;
+    use Auditable, BelongsToTenant, LogicalDelete;
 
     protected $fillable = [
+        'tenant_id',
         'order_id',
         'scop',
         'plant_id',

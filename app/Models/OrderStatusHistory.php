@@ -3,16 +3,18 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrderStatusHistory extends Model
 {
-    use Auditable;
+    use Auditable, BelongsToTenant;
 
     protected $table = 'order_status_history';
 
     protected $fillable = [
+        'tenant_id',
         'order_id',
         'status_id',
         'previous_status_id',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Layout, Menu, Dropdown, Space, Avatar, Typography, theme } from 'antd';
+import { Layout, Menu, Dropdown, Space, Avatar, theme } from 'antd';
 import {
     DashboardOutlined,
     FileTextOutlined,
@@ -41,7 +41,7 @@ function iconFor(index) {
     return <Icon />;
 }
 
-export default function PanelLayout({ children, title }) {
+export default function PanelLayout({ children }) {
     const { auth } = usePage().props;
     const user = auth?.user;
     const { t } = useTranslations();
@@ -133,12 +133,9 @@ export default function PanelLayout({ children, title }) {
                         paddingInline: 24,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
+                        justifyContent: 'flex-end',
                     }}
                 >
-                    <Typography.Title level={4} style={{ margin: 0 }}>
-                        {title}
-                    </Typography.Title>
                     <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
                         <Space style={{ cursor: 'pointer' }}>
                             <Avatar icon={<UserOutlined />} />
@@ -148,6 +145,7 @@ export default function PanelLayout({ children, title }) {
                 </Header>
                 <Content style={{ margin: 24 }}>
                     <div
+                        className="ui-panel-content"
                         style={{
                             padding: 24,
                             background: colorBgContainer,

@@ -2,14 +2,21 @@
 
 namespace App\Services;
 
+use App\Models\Advisor;
 use App\Models\Customer;
+use App\Models\Driver;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
+use App\Models\Plant;
+use App\Models\Product;
+use App\Models\Vehicle;
+use App\Models\Wholesaler;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -32,6 +39,16 @@ class OrderService
     public function create(array $data): Order
     {
         $customer = $this->resolveCustomer($data['customer'] ?? []);
+
+        // Chofer y vehículos: se reutilizan por licencia/placa o se crean si
+        // no existen (flujo público, mismo patrón que resolveCustomer).
+        $data['driver_id'] = $this->resolveDriver($data['driver'] ?? [])->id;
+        $data['tanker_id'] = $this->resolveVehicle($data['tanker'] ?? [], Vehicle::TYPE_TANKER)->id;
+        $data['tractor_id'] = $this->resolveVehicle($data['tractor'] ?? [], Vehicle::TYPE_TRACTOR)->id;
+
+        // Validación estricta multi-tenant: todas las entidades referenciadas
+        // deben pertenecer a la organización destino (scope del contexto).
+        $this->assertReferencedEntities($data);
 
         // Fecha del pedido: la fecha elegida con la hora de registro actual
         // (America/Lima). Si no se envía fecha, se usa el momento actual.
@@ -105,6 +122,66 @@ class OrderService
     }
 
     /**
+     * Reutiliza el chofer por número de licencia; si no existe lo crea.
+     */
+    public function resolveDriver(array $input): Driver
+    {
+        $licenseNumber = trim((string) ($input['license_number'] ?? ''));
+
+        if ($licenseNumber === '') {
+            throw ValidationException::withMessages([
+                'driver.license_number' => __('order.driver_required'),
+            ]);
+        }
+
+        return Driver::where('license_number', $licenseNumber)
+            ->firstOrCreate(
+                ['license_number' => $licenseNumber],
+                ['name' => trim((string) ($input['name'] ?? ''))],
+            );
+    }
+
+    /**
+     * Reutiliza el vehículo por placa; si no existe lo crea con el tipo pedido.
+     * Si la placa ya existe con otro tipo, se rechaza (validación por campo).
+     */
+    public function resolveVehicle(array $input, string $type): Vehicle
+    {
+        $licensePlate = strtoupper(trim((string) ($input['license_plate'] ?? '')));
+
+        $field = $type === Vehicle::TYPE_TANKER ? 'tanker.license_plate' : 'tractor.license_plate';
+
+        if ($licensePlate === '') {
+            throw ValidationException::withMessages([
+                $field => __('order.vehicle_required'),
+            ]);
+        }
+
+        $existing = Vehicle::where('license_plate', $licensePlate)->first();
+
+        if ($existing) {
+            if ($existing->type !== $type) {
+                $label = $existing->type === Vehicle::TYPE_TANKER ? 'tanker' : 'tractor';
+
+                throw ValidationException::withMessages([
+                    $field => __('order.plate_type_conflict', [
+                        'plate' => $licensePlate,
+                        'type' => __('order.'.$label),
+                    ]),
+                ]);
+            }
+
+            return $existing;
+        }
+
+        return Vehicle::create([
+            'license_plate' => $licensePlate,
+            'type' => $type,
+            'is_active' => 1,
+        ]);
+    }
+
+    /**
      * Estado por defecto (Pendiente) que reciben las órdenes nuevas.
      */
     public function pendingStatusId(): int
@@ -163,6 +240,45 @@ class OrderService
     public function statusByCode(string $code): ?OrderStatus
     {
         return OrderStatus::where('code', $code)->first();
+    }
+
+    /**
+     * Verifica que cada entidad referenciada exista dentro de la organización
+     * activa del contexto (los global scopes de BelongsToTenant filtran por
+     * tenant_id, por lo que "no existe" es equivalente a "es de otra org").
+     */
+    private function assertReferencedEntities(array $data): void
+    {
+        $checks = [
+            ['type' => Advisor::class, 'id' => $data['advisor_id'] ?? null],
+            ['type' => Driver::class, 'id' => $data['driver_id'] ?? null],
+            ['type' => Vehicle::class, 'id' => $data['tanker_id'] ?? null, 'type_value' => Vehicle::TYPE_TANKER],
+            ['type' => Vehicle::class, 'id' => $data['tractor_id'] ?? null, 'type_value' => Vehicle::TYPE_TRACTOR],
+        ];
+
+        foreach ($data['details'] ?? [] as $detail) {
+            $checks[] = ['type' => Plant::class, 'id' => $detail['plant_id'] ?? null];
+            $checks[] = ['type' => Wholesaler::class, 'id' => $detail['wholesaler_id'] ?? null];
+            $checks[] = ['type' => Product::class, 'id' => $detail['product_id'] ?? null];
+        }
+
+        foreach ($checks as $check) {
+            if ($check['id'] === null) {
+                continue;
+            }
+
+            $query = ($check['type'])::query()->whereKey((int) $check['id']);
+
+            if (isset($check['type_value'])) {
+                $query->where('type', $check['type_value']);
+            }
+
+            if (! $query->exists()) {
+                throw ValidationException::withMessages([
+                    'details' => __('order.invalid_references'),
+                ]);
+            }
+        }
     }
 
     private function actorId(): int

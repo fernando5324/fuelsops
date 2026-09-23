@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Platform\Customers;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasIndexPage;
 use App\Models\Customer;
 use App\Models\Wholesaler;
 
-class CustomerController extends CatalogController
+class CustomerController extends Controller
 {
+    use HasIndexPage;
+
     protected string $model = Customer::class;
 
     protected string $resource = 'customers';
@@ -15,6 +18,10 @@ class CustomerController extends CatalogController
     protected string $titleKey = 'menus.customers';
 
     protected array $searchable = ['name', 'tax_id'];
+
+    protected array $filters = [
+        ['key' => 'is_active', 'label' => 'common.active', 'type' => 'boolean'],
+    ];
 
     protected array $fields = [
         ['key' => 'tax_id', 'label' => 'catalogs.tax_id', 'type' => 'text', 'required' => true],
@@ -32,5 +39,14 @@ class CustomerController extends CatalogController
                 ->map(fn ($w) => ['value' => (int) $w->id, 'label' => $w->name])
                 ->all(),
         ];
+    }
+
+    /**
+     * La URL web es el segmento en español (ADR-003), distinto del
+     * `$resource` interno en inglés.
+     */
+    protected function pageUrl(): string
+    {
+        return '/catalogos/clientes';
     }
 }

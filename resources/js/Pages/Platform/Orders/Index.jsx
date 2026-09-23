@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { router, usePage, Link } from '@inertiajs/react';
 import {
     Alert,
     App,
     Button,
-    Card,
     DatePicker,
     Drawer,
     Input,
@@ -19,6 +18,8 @@ import {
 import { EyeOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import PanelLayout from '../../../Layouts/PanelLayout';
+import PageHeader from '@/Components/PageHeader';
+import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
@@ -42,6 +43,10 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
     const [selectedId, setSelectedId] = useState(null);
     const [inspection, setInspection] = useState(null);
     const [failed, setFailed] = useState(false);
+
+    const searchTimer = useRef(null);
+
+    useEffect(() => () => clearTimeout(searchTimer.current), []);
 
     useEffect(() => {
         if (flash?.success) {
@@ -71,7 +76,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
             delete params.date_to;
         }
 
-        router.get('/pedidos', params, { preserveState: true, replace: true });
+        router.get(Orders.routes.index, params, { preserveState: true, replace: true });
     };
 
     const loadInspection = async (id) => {
@@ -79,11 +84,8 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
         setInspection(null);
         setFailed(false);
         try {
-            const res = await fetch(`/pedidos/${id}/detalle`);
-            if (!res.ok) {
-                throw new Error(res.statusText);
-            }
-            setInspection(await res.json());
+            const res = await Orders.detail(id);
+            setInspection(res.data);
         } catch (e) {
             setFailed(true);
         }
@@ -176,16 +178,23 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
     ];
 
     return (
-        <PanelLayout title={t('menus.orders')}>
-            <Card>
+        <PanelLayout>
+            <PageHeader title={t('menus.orders')} />
+            <div className="ui-list-section">
                 <Space wrap style={{ marginBottom: 16, width: '100%' }}>
-                    <Input.Search
+                    <Input
                         allowClear
                         placeholder={t('order.search_placeholder')}
                         value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        onSearch={() => applyFilters({ q: q || undefined })}
-                        enterButton={<SearchOutlined />}
+                        onChange={(e) => {
+                            const value = e.target.value ?? '';
+                            setQ(value);
+                            clearTimeout(searchTimer.current);
+                            searchTimer.current = setTimeout(() => {
+                                applyFilters({ q: value.trim() || undefined });
+                            }, 350);
+                        }}
+                        prefix={<SearchOutlined />}
                         className="ui-filter-search"
                     />
                     <Select
@@ -238,11 +247,11 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
                         total: orders?.total || 0,
                         showTotal: (total) => `${total} ${t('common.records_found')}`,
                         onChange: (page) => {
-                            router.get(`/pedidos`, { ...filter, page }, { preserveState: true });
+                            router.get(Orders.routes.index, { ...filter, page }, { preserveState: true });
                         },
                     }}
                 />
-            </Card>
+            </div>
 
             <Drawer
                 title={

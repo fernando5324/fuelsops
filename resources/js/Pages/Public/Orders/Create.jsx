@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
+import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import SubmitButton from '@/Components/SubmitButton';
 import SectionCard from '@/Components/SectionCard';
@@ -45,18 +46,17 @@ const fieldFromError = (key) => {
 
 const normFile = (e) => (Array.isArray(e) ? e : e?.fileList || []);
 
-export default function PublicOrderCreate({
-    advisors,
-    plants,
-    wholesalers,
-    products,
-    drivers,
-    vehicles,
-}) {
+export default function PublicOrderCreate({ advisors, plants, wholesalers, products }) {
     const [form] = Form.useForm();
     const [totals, setTotals] = useState({ gallons: 0, sale: 0 });
     const [customerStatus, setCustomerStatus] = useState('idle');
-    const lookupTimer = useRef(null);
+    const [driverStatus, setDriverStatus] = useState('idle');
+    const [tankerStatus, setTankerStatus] = useState('idle');
+    const [tractorStatus, setTractorStatus] = useState('idle');
+    const customerTimer = useRef(null);
+    const driverTimer = useRef(null);
+    const tankerTimer = useRef(null);
+    const tractorTimer = useRef(null);
     const { message } = App.useApp();
     const { errors } = usePage().props;
     const { t } = useTranslations();
@@ -71,12 +71,17 @@ export default function PublicOrderCreate({
         }
     }, [errors, form, message]);
 
-    useEffect(() => () => clearTimeout(lookupTimer.current), []);
+    useEffect(
+        () => () => {
+            clearTimeout(customerTimer.current);
+            clearTimeout(driverTimer.current);
+            clearTimeout(tankerTimer.current);
+            clearTimeout(tractorTimer.current);
+        },
+        [],
+    );
 
     const updates = Form.useWatch('details', form) || [];
-    const driverId = Form.useWatch('driver_id', form);
-    const tankerId = Form.useWatch('tanker_id', form);
-    const tractorId = Form.useWatch('tractor_id', form);
 
     useEffect(() => {
         const gallons = updates.reduce((a, d) => a + (Number(d?.gallons) || 0), 0);
@@ -87,13 +92,6 @@ export default function PublicOrderCreate({
         setTotals({ gallons, sale });
     }, [updates]);
 
-    const tankers = (vehicles || []).filter((v) => v.type === 'TANKER');
-    const tractors = (vehicles || []).filter((v) => v.type === 'TRACTOR');
-
-    const selectedDriver = (drivers || []).find((d) => d.id === driverId);
-    const selectedTanker = tankers.find((v) => v.id === tankerId);
-    const selectedTractor = tractors.find((v) => v.id === tractorId);
-
     const runLookup = async (rawTaxId) => {
         const taxId = (rawTaxId || '').trim();
         if (taxId.length < 6) {
@@ -102,9 +100,7 @@ export default function PublicOrderCreate({
         }
 
         try {
-            const { data } = await window.axios.post('/pedidos/consulta-cliente', {
-                tax_id: taxId,
-            });
+            const { data } = await Orders.lookupCustomer(taxId);
 
             if (data.found) {
                 const current = form.getFieldValue('customer') || {};
@@ -121,8 +117,68 @@ export default function PublicOrderCreate({
     const onTaxIdChange = (e) => {
         const value = e.target.value;
         setCustomerStatus('idle');
-        clearTimeout(lookupTimer.current);
-        lookupTimer.current = setTimeout(() => runLookup(value), 500);
+        clearTimeout(customerTimer.current);
+        customerTimer.current = setTimeout(() => runLookup(value), 500);
+    };
+
+    const runDriverLookup = async (rawLicense) => {
+        const license = (rawLicense || '').trim();
+        if (license.length < 4) {
+            setDriverStatus('idle');
+            return;
+        }
+
+        try {
+            const { data } = await Orders.lookupDriver(license);
+
+            if (data.found) {
+                const current = form.getFieldValue('driver') || {};
+                form.setFieldsValue({ driver: { ...current, name: data.name } });
+                setDriverStatus('found');
+            } else {
+                setDriverStatus('not_found');
+            }
+        } catch (e) {
+            setDriverStatus('idle');
+        }
+    };
+
+    const onDriverLicenseChange = (e) => {
+        const value = e.target.value;
+        setDriverStatus('idle');
+        clearTimeout(driverTimer.current);
+        driverTimer.current = setTimeout(() => runDriverLookup(value), 500);
+    };
+
+    const runVehicleLookup = async (rawPlate, type) => {
+        const plate = (rawPlate || '').trim().toUpperCase();
+        const setStatus = type === 'TANKER' ? setTankerStatus : setTractorStatus;
+        if (plate.length < 3) {
+            setStatus('idle');
+            return;
+        }
+
+        try {
+            const { data } = await Orders.lookupVehicle(plate, type);
+
+            setStatus(data.found ? 'found' : 'not_found');
+        } catch (e) {
+            setStatus('idle');
+        }
+    };
+
+    const onTankerChange = (e) => {
+        const value = e.target.value;
+        setTankerStatus('idle');
+        clearTimeout(tankerTimer.current);
+        tankerTimer.current = setTimeout(() => runVehicleLookup(value, 'TANKER'), 500);
+    };
+
+    const onTractorChange = (e) => {
+        const value = e.target.value;
+        setTractorStatus('idle');
+        clearTimeout(tractorTimer.current);
+        tractorTimer.current = setTimeout(() => runVehicleLookup(value, 'TRACTOR'), 500);
     };
 
     const hasErrors = errors && Object.keys(errors).length > 0;
@@ -133,9 +189,10 @@ export default function PublicOrderCreate({
         data.append('advisor_id', values.advisor_id);
         data.append('customer[tax_id]', values.customer?.tax_id ?? '');
         data.append('customer[name]', values.customer?.name ?? '');
-        data.append('driver_id', values.driver_id);
-        data.append('tanker_id', values.tanker_id);
-        data.append('tractor_id', values.tractor_id);
+        data.append('driver[license_number]', values.driver?.license_number ?? '');
+        data.append('driver[name]', values.driver?.name ?? '');
+        data.append('tanker[license_plate]', values.tanker?.license_plate ?? '');
+        data.append('tractor[license_plate]', values.tractor?.license_plate ?? '');
 
         if (values.notes) {
             data.append('notes', values.notes);
@@ -177,7 +234,6 @@ export default function PublicOrderCreate({
 
                 <Form form={form} layout="vertical" onFinish={onFinish} autoComplete="off">
                     <SectionCard
-                        index={1}
                         title={t('order.section_general')}
                         description={t('order.section_general_help')}
                     >
@@ -213,14 +269,11 @@ export default function PublicOrderCreate({
                                     name={['customer', 'tax_id']}
                                     label={t('order.customer_tax_id')}
                                     rules={[{ required: true, message: `${t('order.customer_tax_id')} ${t('common.required')}` }]}
-                                    validateStatus={customerStatus === 'not_found' ? 'warning' : undefined}
                                     extra={
                                         customerStatus === 'found' ? (
                                             <Text className="ui-ok">
                                                 <CheckCircleOutlined /> {t('order.customer_found')}
                                             </Text>
-                                        ) : customerStatus === 'not_found' ? (
-                                            <Text type="secondary">{t('order.customer_not_found')}</Text>
                                         ) : null
                                     }
                                 >
@@ -247,33 +300,17 @@ export default function PublicOrderCreate({
                     </SectionCard>
 
                     <SectionCard
-                        index={2}
                         title={t('order.section_driver')}
                         description={t('order.section_driver_help')}
                     >
                         <Row gutter={16}>
                             <Col xs={24} sm={12}>
                                 <Form.Item
-                                    name="driver_id"
+                                    name={['driver', 'license_number']}
                                     label={t('order.license_number')}
                                     rules={[{ required: true, message: `${t('order.license_number')} ${t('common.required')}` }]}
-                                >
-                                    <Select
-                                        showSearch
-                                        optionFilterProp="label"
-                                        placeholder={t('order.license_number')}
-                                        options={(drivers || []).map((d) => ({
-                                            value: d.id,
-                                            label: d.license_number,
-                                        }))}
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12}>
-                                <Form.Item
-                                    label={t('order.driver_name')}
                                     extra={
-                                        selectedDriver ? (
+                                        driverStatus === 'found' ? (
                                             <Text className="ui-ok">
                                                 <CheckCircleOutlined /> {t('order.driver_found')}
                                             </Text>
@@ -281,60 +318,73 @@ export default function PublicOrderCreate({
                                     }
                                 >
                                     <Input
-                                        value={selectedDriver?.name || ''}
-                                        readOnly
-                                        placeholder={t('order.driver_name')}
+                                        maxLength={50}
+                                        onChange={onDriverLicenseChange}
+                                        onBlur={(e) => runDriverLookup(e.target.value)}
                                     />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12}>
+                                <Form.Item
+                                    name={['driver', 'name']}
+                                    label={
+                                        <Space size={6}>
+                                            <Text>{t('order.driver_name')}</Text>
+                                            {driverStatus === 'found' && (
+                                                <Tag className="ui-autocomplete-tag" color="success">{t('order.driver_found')}</Tag>
+                                            )}
+                                        </Space>
+                                    }
+                                    rules={[{ required: true, message: `${t('order.driver_name')} ${t('common.required')}` }]}
+                                >
+                                    <Input maxLength={200} placeholder={t('order.driver_name')} />
                                 </Form.Item>
                             </Col>
                         </Row>
                     </SectionCard>
 
                     <SectionCard
-                        index={3}
                         title={t('order.section_vehicle')}
                         description={t('order.section_vehicle_help')}
                     >
                         <Row gutter={16}>
                             <Col xs={24} sm={12}>
                                 <Form.Item
-                                    name="tanker_id"
+                                    name={['tanker', 'license_plate']}
                                     label={t('order.tanker_plate')}
                                     rules={[{ required: true, message: `${t('order.tanker_plate')} ${t('common.required')}` }]}
                                     extra={
-                                        selectedTanker ? (
+                                        tankerStatus === 'found' ? (
                                             <Text className="ui-ok">
                                                 <CheckCircleOutlined /> {t('order.vehicle_found')}
                                             </Text>
                                         ) : null
                                     }
                                 >
-                                    <Select
-                                        showSearch
-                                        optionFilterProp="label"
-                                        placeholder={t('order.tanker_plate')}
-                                        options={tankers.map((v) => ({ value: v.id, label: v.license_plate }))}
+                                    <Input
+                                        maxLength={20}
+                                        onChange={onTankerChange}
+                                        onBlur={(e) => runVehicleLookup(e.target.value, 'TANKER')}
                                     />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} sm={12}>
                                 <Form.Item
-                                    name="tractor_id"
+                                    name={['tractor', 'license_plate']}
                                     label={t('order.tractor_plate')}
                                     rules={[{ required: true, message: `${t('order.tractor_plate')} ${t('common.required')}` }]}
                                     extra={
-                                        selectedTractor ? (
+                                        tractorStatus === 'found' ? (
                                             <Text className="ui-ok">
                                                 <CheckCircleOutlined /> {t('order.vehicle_found')}
                                             </Text>
                                         ) : null
                                     }
                                 >
-                                    <Select
-                                        showSearch
-                                        optionFilterProp="label"
-                                        placeholder={t('order.tractor_plate')}
-                                        options={tractors.map((v) => ({ value: v.id, label: v.license_plate }))}
+                                    <Input
+                                        maxLength={20}
+                                        onChange={onTractorChange}
+                                        onBlur={(e) => runVehicleLookup(e.target.value, 'TRACTOR')}
                                     />
                                 </Form.Item>
                             </Col>
@@ -342,7 +392,6 @@ export default function PublicOrderCreate({
                     </SectionCard>
 
                     <SectionCard
-                        index={4}
                         title={t('order.section_detail')}
                         description={t('order.section_detail_help')}
                     >
@@ -465,7 +514,6 @@ export default function PublicOrderCreate({
                     </SectionCard>
 
                     <SectionCard
-                        index={5}
                         title={t('order.section_observations')}
                         description={t('order.section_observations_help')}
                     >
@@ -484,7 +532,7 @@ export default function PublicOrderCreate({
                                     beforeUpload={() => false}
                                     multiple
                                     maxCount={5}
-                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                                    accept=".pdf,.jpg,.jpeg"
                                 >
                                     <p className="ant-upload-drag-icon">
                                         <InboxOutlined />

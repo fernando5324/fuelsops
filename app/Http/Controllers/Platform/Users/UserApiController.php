@@ -2,18 +2,25 @@
 
 namespace App\Http\Controllers\Platform\Users;
 
-use App\Http\Controllers\Platform\Catalogs\CatalogApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Platform\Concerns\HasCrudActions;
 use App\Models\User;
+use App\Services\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
-class UserApiController extends CatalogApiController
+class UserApiController extends Controller
 {
+    use HasCrudActions;
+
     protected string $model = User::class;
 
-    protected bool $logicalDelete = true;
+    protected function logicalDelete(): bool
+    {
+        return true;
+    }
 
     protected function rules(?Model $entity = null): array
     {
@@ -30,7 +37,10 @@ class UserApiController extends CatalogApiController
     protected function prepareForCreate(array $data): array
     {
         $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
-        $data['is_owner'] = (bool) ($data['is_owner'] ?? false);
+        // El usuario solo puede crear cuentas en su propia organización.
+        $data['tenant_id'] = TenantContext::id();
+        // Solo el propietario de la organización puede crear propietarios.
+        $data['is_owner'] = $this->canAssignOwnership() && (bool) ($data['is_owner'] ?? false);
 
         return $data;
     }
@@ -38,7 +48,12 @@ class UserApiController extends CatalogApiController
     protected function prepareForUpdate(Model $entity, array $data): array
     {
         $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
-        unset($data['is_owner']);
+
+        if ($this->canAssignOwnership()) {
+            $data['is_owner'] = (bool) ($data['is_owner'] ?? false);
+        } else {
+            unset($data['is_owner']);
+        }
 
         if (empty($data['password'])) {
             unset($data['password']);
@@ -47,13 +62,31 @@ class UserApiController extends CatalogApiController
         return $data;
     }
 
-    public function destroy(Model $entity): RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
-        if ((int) $entity->getKey() === (int) config('sertoco.system_user_id')) {
-            return Redirect::back()
+        if ((int) $this->resolveRouteEntity()->getKey() === (int) config('sertoco.system_user_id')) {
+            return back()
                 ->withErrors(['system_user' => __('catalogs.system_user_protected')]);
         }
 
-        return parent::destroy($entity);
+        $entity = $this->resolveRouteEntity();
+        $this->authorizeEntity($entity);
+
+        $entity->delete();
+
+        return back()->with('flash', ['success' => __('catalogs.deleted')]);
+    }
+
+    /**
+     * Solo es posible operar usuarios de la propia organización.
+     */
+    protected function authorizeEntity(Model $entity): void
+    {
+        abort_unless((int) $entity->tenant_id === TenantContext::id(), 404);
+    }
+
+    private function canAssignOwnership(): bool
+    {
+        return (bool) auth()->user()?->is_owner;
     }
 }

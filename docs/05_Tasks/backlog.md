@@ -11,9 +11,9 @@ misma carpeta.
 | Fase/Flujo | Estado |
 |------------|--------|
 | A. Base de datos y arquitectura | Completado: esquema, auditoría, estados, semillas, modelos Eloquent (Auditable/LogicalDelete), traducciones es y SQL-run implementados. Pendiente: revisión con datos reales (T-009). Política de cambios: los esquemas se aplican directo sobre `sertocobd` y se reflejan en `database.sql` (SCHEMA_UPDATES.sql eliminado); restablecer la BD exige OK del usuario. `orders.order_date` es DATETIME (fecha + hora, America/Lima) |
-| B. Formulario público           | Completado (verificado E2E por HTTP); pendiente anti-spam (T-031) pleno. Rediseño ADR-006 aplicado y refinado: header público con logo + pill de conexión, **5 secciones exactas de la referencia** (Información general, Datos del chofer, Datos del vehículo, Detalle del pedido, Observaciones del pedido) con encabezados numerados y Resumen del pedido destacado (azul informativo + monto venta en naranja), CTA "Registrar pedido" con estado "Registrando pedido...", tabla de productos responsive (tabla desktop / tarjetas móvil) con numeración automática, eliminar por ícono + aria-label, `prefix="S/"` en precio, autocompletado licencia→conductor y RUC→cliente (`POST /pedidos/consulta-cliente`), scroll al primer error + `validation_summary` |
-| C. Panel interno (Ant Design)   | Completado: login/registro, layout, dashboard, pedidos, estado+historial, adjuntos, usuarios, perfil (solo accesible desde el dropdown del nombre, ya no en el menú) y auth legacy migrado a antd. Breeze/Tailwind eliminado. Fechas `dd/mm/yyyy` (pedidos con `hh:mm:ss`) en America/Lima. Rediseño ADR-006 aplicado y refinado: paleta institucional, logo real en el sidebar, acciones de tabla solo con íconos + Tooltip (Ver/Editar/Eliminar), filtros responsive y Drawer de inspección |
-| D. Catálogos y estados          | Completado: CRUD de los 9 módulos + activo/inactivo en el panel |
+| B. Formulario público           | Completado (verificado E2E por HTTP); pendiente anti-spam (T-031) pleno. Rediseño ADR-006 aplicado y refinado: header público con logo + pill de conexión, **5 secciones exactas de la referencia** (Información general, Datos del chofer, Datos del vehículo, Detalle del pedido, Observaciones del pedido) con encabezados numerados y Resumen del pedido destacado (azul informativo + monto venta en naranja), CTA "Registrar pedido" con estado "Registrando pedido...", tabla de productos responsive (tabla desktop / tarjetas móvil) con numeración automática, eliminar por ícono + aria-label, `prefix="S/"` en precio, autocompletado licencia→conductor y RUC→cliente (`POST /orders/lookup-customer`), scroll al primer error + `validation_summary` |
+| C. Panel interno (Ant Design)   | Completado: login/registro, layout, dashboard, pedidos, estado+historial, adjuntos, usuarios, perfil (solo accesible desde el dropdown del nombre, ya no en el menú) y auth legacy migrado a antd. Breeze/Tailwind eliminado. Fechas `dd/mm/yyyy` (pedidos con `hh:mm:ss`) en America/Lima. Rediseño ADR-006 aplicado y refinado: paleta institucional, logo real en el sidebar, acciones de tabla solo con íconos + Tooltip (Ver/Editar/Eliminar), filtros responsive y Drawer de inspección. Listados sin Card (`.ui-list-section`) y título por página vía `PageHeader` (PanelLayout sin `title`) |
+| D. Catálogos y estados          | Completado: CRUD de los 9 módulos + activo/inactivo en el panel. Arquitectura ADR-009/ADR-064 aplicada: cada módulo compone los traits `HasIndexPage`/`HasCrudActions` (+ `Service` backend opcional), rutas/APIs en inglés (`/api/*`, `orders/*/status|detail`, lookups `/orders/lookup-*`, sin `Route::resource`) y front via `Utils/Ajax.js` + un Service por módulo en `resources/js/Services/` (registro `catalogServices`); página genérica en `Platform/Shared/Index.jsx` |
 | E. Validaciones y reglas        | Pendiente de confirmación con Sertoco |
 | F. Integraciones externas       | Backlog (futuro) |
 | G. Reportes y mejoras           | No iniciado |
@@ -383,14 +383,32 @@ tarjetas en móvil), autocompletado conductor (licencia→nombre) y cliente
 
 ## D. Gestión de catálogos y estados (Roadmap Fase 3)
 
-Cada módulo sigue la estructura de ADR-064 (`Controller` + `ApiController`
-+ `Service` opcional) y el patrón `is_active` / `is_deleted` de ADR-001/005.
+Cada módulo sigue la estructura de ADR-064 con los traits `HasIndexPage`/
+`HasCrudActions` de `app/Http/Controllers/Platform/Concerns/` (`Controller`
+Inertia + `ApiController` JSON + `Service` opcional) y el patrón
+`is_active` / `is_deleted` de ADR-001/005. "Catálogo" es solo un nombre
+lógico: no existe carpeta física `Platform/Catalogs/`. El front consume las
+APIs vía `resources/js/Utils/Ajax.js` + un Service por módulo
+(`resources/js/Services/`), y la página genérica vive en
+`resources/js/Pages/Platform/Shared/Index.jsx` (ADR-009 §36).
 
 - [x] T-060 — Gestión de asesores (advisors).
     - Prioridad: Media
     - Fase: D
     - Criterio de aceptación: CRUD + activo/inactivo en el panel.
       Verificado por HTTP (POST asesor → 302 y aparece en el listado).
+    - 22-09-2026: individualizado — primer módulo con página propia
+      `Platform/Advisors/Index.jsx` (modal de alta/edición, búsqueda,
+      filtro activo, borrado con confirm, paginación server-side) y
+      `AdvisorController::pageComponent()` → `Platform/Advisors/Index`;
+      retirado de `catalogServices`. Verificado E2E (render de la página
+      dedicada, CRUD `/api/advisors` 302, limpieza a seed).
+    - Corregido bug de cliente al guardar desde el modal: `const submit =
+      router.put : router.post` desacoplaba el `this` de `@inertiajs/core`
+      (`Cannot read properties of undefined (reading 'visit')`); se llama
+      `router.put/post(...)` directo (mismo fix en `Shared/Index.jsx`).
+      Guardado del modal verificado con Edge headless (fila creada, sin
+      excepciones de consola, limpieza a seed).
 
 - [x] T-061 — Gestión de plantas (plants).
     - Prioridad: Media
@@ -508,9 +526,17 @@ Solo backlog. No implementar hasta identificar los servicios disponibles.
     - Dependencias: T-047
     - Criterio de aceptación: línea de tiempo de cambios de estado visible.
 
-- [ ] T-092 — Búsqueda y filtros avanzados.
+- [x] T-092 — Búsqueda y filtros avanzados.
     - Prioridad: Media
     - Fase: G
+    - Referencias: ADR-069 (`docs/03_Decisions/ADR-007.md`)
+    - Implementado (2026-09-21): búsqueda textual server-side con debounce
+      de 350 ms (mínimo 1 carácter) en el índice de pedidos y en el índice
+      genérico de catálogos/usuarios; filtros por módulo server-side:
+      `is_active` en todos los catálogos, `type` (Tanquera/Tractora) en
+      vehículos y `is_owner`/`is_active` en usuarios; paginación server-side
+      conservada y respeto al aislamiento por organización (los filtros se
+      aplican después del global scope). Verificado E2E por HTTP.
 
 - [ ] T-093 — Exportación/reportes según requerimientos.
     - Prioridad: Media
