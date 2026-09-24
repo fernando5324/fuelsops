@@ -52,4 +52,5 @@ return [
     'offline' => 'Sin conexión',
     'autocomplete' => 'Autocompletado',
     'try_again' => 'Reintentar',
+    'undo' => 'Deshacer',
 ];

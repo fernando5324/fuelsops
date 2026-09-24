@@ -7,6 +7,8 @@ export const Orders = {
         index: '/pedidos',
         create: '/pedidos/registro',
         show: (id) => `/pedidos/${id}`,
+        edit: (id) => `/pedidos/${id}/editar`,
+        update: (id) => `/pedidos/${id}`,
         confirmed: (id) => `/pedidos/${id}/confirmado`,
         changeStatus: (id) => `${base}/${id}/status`,
         detail: (id) => `${base}/${id}/detail`,

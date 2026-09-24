@@ -139,7 +139,7 @@ export default function PanelLayout({ children }) {
                     <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
                         <Space style={{ cursor: 'pointer' }}>
                             <Avatar icon={<UserOutlined />} />
-                            <span>{user?.first_name || user?.name}</span>
+                            <span>{user?.name}</span>
                         </Space>
                     </Dropdown>
                 </Header>

@@ -200,7 +200,8 @@ export default function CatalogsIndex({ config, rows, filter }) {
         const options = { preserveScroll: true, forceFormData: true, onSuccess: () => setOpen(false) };
 
         if (editing) {
-            router.put(url, values, options);
+            // POST multipart + _method=PUT: PHP no lee cuerpos multipart en PUT
+            router.post(url, { ...values, _method: 'PUT' }, options);
         } else {
             router.post(url, values, options);
         }

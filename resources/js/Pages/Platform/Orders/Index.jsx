@@ -15,7 +15,7 @@ import {
     Tooltip,
     Typography,
 } from 'antd';
-import { EyeOutlined, SearchOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import PanelLayout from '../../../Layouts/PanelLayout';
 import PageHeader from '@/Components/PageHeader';
@@ -24,7 +24,7 @@ import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
 import statusColor from '@/lib/status';
-import OrderInspection from '@/Components/OrderInspection';
+import OrderPreview from '@/Components/Orders/OrderPreview';
 
 const { RangePicker } = DatePicker;
 
@@ -161,18 +161,34 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
         },
         {
             title: t('common.actions'),
-            width: 64,
+            width: 110,
             align: 'center',
             render: (_, row) => (
-                <Tooltip title={t('common.view')}>
-                    <Link
-                        href={`/pedidos/${row.id}`}
-                        className="ui-icon-link"
-                        aria-label={t('common.view')}
-                    >
-                        <EyeOutlined />
-                    </Link>
-                </Tooltip>
+                <Space size={4}>
+                    <Tooltip title={t('common.view')}>
+                        <Button
+                            type="text"
+                            className="ui-icon-link"
+                            aria-label={t('common.view')}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                loadInspection(row.id);
+                            }}
+                        >
+                            <EyeOutlined />
+                        </Button>
+                    </Tooltip>
+                    <Tooltip title={t('common.edit')}>
+                        <Link
+                            href={Orders.routes.edit(row.id)}
+                            className="ui-icon-link"
+                            aria-label={t('common.edit')}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <EditOutlined />
+                        </Link>
+                    </Tooltip>
+                </Space>
             ),
         },
     ];
@@ -256,10 +272,10 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
             <Drawer
                 title={
                     selectedId
-                        ? `${t('order.order_detail')} #${selectedId}`
+                        ? `${t('order.order_number')} #${selectedId}`
                         : t('order.order_detail')
                 }
-                width={560}
+                size="min(100%, 560px)"
                 open={!!selectedId}
                 onClose={() => {
                     setSelectedId(null);
@@ -268,9 +284,14 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
                 }}
                 extra={
                     selectedId ? (
-                        <Link href={`/pedidos/${selectedId}`}>
-                            <Button type="primary">{t('common.view')}</Button>
-                        </Link>
+                        <Space>
+                            <Link href={`/pedidos/${selectedId}`}>
+                                <Button type="primary">{t('order.view_order')}</Button>
+                            </Link>
+                            <Link href={Orders.routes.edit(selectedId)}>
+                                <Button>{t('order.edit_order')}</Button>
+                            </Link>
+                        </Space>
                     ) : null
                 }
             >
@@ -285,7 +306,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
                         }
                     />
                 ) : inspection && inspection.order ? (
-                    <OrderInspection order={inspection.order} totals={inspection.totals} />
+                    <OrderPreview order={inspection.order} totals={inspection.totals} />
                 ) : (
                     <div style={{ textAlign: 'center', padding: 48 }}>
                         <Spin />

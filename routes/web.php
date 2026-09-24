@@ -68,6 +68,8 @@ Route::middleware('auth')->group(function () {
     // Pedidos del panel (vistas)
     Route::get('/pedidos', [OrderController::class, 'index'])->name('pedidos.index');
     Route::get('/pedidos/{order}', [OrderController::class, 'show'])->name('pedidos.show');
+    Route::get('/pedidos/{order}/editar', [OrderController::class, 'edit'])->name('pedidos.edit');
+    Route::put('/pedidos/{order}', [OrderController::class, 'update'])->name('pedidos.update');
 
     // Catálogos (vistas)
     Route::prefix('catalogos')->name('catalogos.')->group(function () {

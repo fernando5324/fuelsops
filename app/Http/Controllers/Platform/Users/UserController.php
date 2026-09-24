@@ -25,6 +25,7 @@ class UserController extends Controller
     ];
 
     protected array $fields = [
+        ['key' => 'name', 'label' => 'profile.username', 'type' => 'text', 'required' => true],
         ['key' => 'first_name', 'label' => 'common.first_name', 'type' => 'text', 'required' => true],
         ['key' => 'last_name', 'label' => 'common.last_name', 'type' => 'text', 'required' => false],
         ['key' => 'email', 'label' => 'auth.email', 'type' => 'text', 'required' => true],

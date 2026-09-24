@@ -57,13 +57,33 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status }) {
             <Form
                 layout="vertical"
                 onFinish={onFinish}
-                initialValues={{ name: user.name, email: user.email }}
+                initialValues={{
+                    name: user.name,
+                    first_name: user.first_name,
+                    last_name: user.last_name || '',
+                    email: user.email,
+                }}
                 autoComplete="off"
             >
                 <Form.Item
                     name="name"
-                    label={t('common.full_name')}
+                    label={t('profile.username')}
                     rules={[{ required: true, message: t('common.required') }]}
+                >
+                    <Input />
+                </Form.Item>
+
+                <Form.Item
+                    name="first_name"
+                    label={t('profile.first_names')}
+                    rules={[{ required: true, message: t('common.required') }]}
+                >
+                    <Input />
+                </Form.Item>
+
+                <Form.Item
+                    name="last_name"
+                    label={t('profile.last_names')}
                 >
                     <Input />
                 </Form.Item>

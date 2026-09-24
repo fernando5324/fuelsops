@@ -108,6 +108,77 @@ class OrderService
     }
 
     /**
+     * Actualiza una orden completa (panel, Fase B). Transacción:
+     * - Cliente/chofer/vehículos se reutilizan o crean (find-or-create).
+     * - Detalle: soft-delete de los actuales y alta de los nuevos (aditivo,
+     *   conservando auditoría y referencias históricas).
+     * - Archivos: añade los nuevos y elimina (disco + baja lógica) los que
+     *   vengan en `remove_files`, siempre restringidos a los del pedido.
+     */
+    public function update(Order $order, array $data): Order
+    {
+        $customer = $this->resolveCustomer($data['customer'] ?? []);
+        $data['driver_id'] = $this->resolveDriver($data['driver'] ?? [])->id;
+        $data['tanker_id'] = $this->resolveVehicle($data['tanker'] ?? [], Vehicle::TYPE_TANKER)->id;
+        $data['tractor_id'] = $this->resolveVehicle($data['tractor'] ?? [], Vehicle::TYPE_TRACTOR)->id;
+
+        $this->assertReferencedEntities($data);
+
+        $orderDate = $data['order_date'] ?? now()->format('Y-m-d');
+        $orderDate = Carbon::parse($orderDate)->setTimeFrom(now());
+
+        DB::transaction(function () use ($order, $data, $customer, $orderDate) {
+            $order->update([
+                'order_date' => $orderDate,
+                'advisor_id' => $data['advisor_id'],
+                'customer_id' => $customer->id,
+                'driver_id' => $data['driver_id'],
+                'tanker_id' => $data['tanker_id'],
+                'tractor_id' => $data['tractor_id'],
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            foreach ($order->details()->get() as $detail) {
+                $detail->delete();
+            }
+
+            foreach ($data['details'] as $detail) {
+                OrderDetail::create([
+                    'order_id' => $order->id,
+                    'scop' => $detail['scop'],
+                    'plant_id' => $detail['plant_id'],
+                    'wholesaler_id' => $detail['wholesaler_id'],
+                    'product_id' => $detail['product_id'],
+                    'gallons' => $detail['gallons'],
+                    'sale_price' => $detail['sale_price'] ?? 0,
+                    'compartments' => $detail['compartments'] ?? 1,
+                    'created_by' => $this->actorId(),
+                ]);
+            }
+
+            foreach (($data['files'] ?? []) as $upload) {
+                $this->mediaService->storeFor($order, $upload, [
+                    'directory' => 'orders/' . $order->id,
+                ]);
+            }
+
+            $removeIds = collect($data['remove_files'] ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($removeIds !== []) {
+                foreach ($order->files()->whereIn('id', $removeIds)->get() as $file) {
+                    $this->mediaService->destroy($file);
+                }
+            }
+        });
+
+        $order->refresh();
+
+        return $order;
+    }
+
+    /**
      * Reutiliza el cliente por RUC; si no existe lo crea (usuario sistema).
      */
     public function resolveCustomer(array $input): Customer

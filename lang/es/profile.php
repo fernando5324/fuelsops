@@ -3,6 +3,9 @@
 return [
     'profile_information' => 'Información del perfil',
     'profile_update_hint' => 'Actualice la información de su perfil.',
+    'username' => 'Nombre de usuario',
+    'first_names' => 'Nombres',
+    'last_names' => 'Apellidos',
     'email_unverified' => 'Su correo electrónico no está verificado.',
     'resend_verification' => 'Reenviar verificación',
     'verification_sent' => 'Se ha enviado un nuevo enlace de verificación a su correo.',

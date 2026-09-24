@@ -567,7 +567,7 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                                 className="ui-validation-banner"
                                 type="warning"
                                 showIcon
-                                message={t('order.validation_summary')}
+                                title={t('order.validation_summary')}
                             />
                         )}
 

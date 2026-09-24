@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MediaFile;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Almacenamiento y registro de archivos (media_files, ADR-001).
@@ -58,6 +59,17 @@ class MediaService
     public function defaultDirectory(Model $model): string
     {
         return $model->getTable() . '/' . $model->getKey();
+    }
+
+    /**
+     * Elimina un archivo: borra el físico del disco y aplica baja lógica al
+     * registro (is_deleted). Solo debe llamarse con archivos de la propia
+     * organización (los global scopes ya aíslan el tenant).
+     */
+    public function destroy(MediaFile $file): void
+    {
+        Storage::disk($file->disk)->delete($file->path());
+        $file->delete();
     }
 
     /** @return array{0: int|null, 1: int|null} */

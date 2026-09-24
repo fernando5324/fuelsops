@@ -25,6 +25,7 @@ class UserApiController extends Controller
     protected function rules(?Model $entity = null): array
     {
         return [
+            'name' => ['required', 'string', 'max:100'],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($entity?->id)],
@@ -36,7 +37,7 @@ class UserApiController extends Controller
 
     protected function prepareForCreate(array $data): array
     {
-        $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
+        $data['name'] = trim((string) ($data['name'] ?? ''));
         // El usuario solo puede crear cuentas en su propia organización.
         $data['tenant_id'] = TenantContext::id();
         // Solo el propietario de la organización puede crear propietarios.
@@ -47,7 +48,7 @@ class UserApiController extends Controller
 
     protected function prepareForUpdate(Model $entity, array $data): array
     {
-        $data['name'] = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
+        $data['name'] = trim((string) ($data['name'] ?? ''));
 
         if ($this->canAssignOwnership()) {
             $data['is_owner'] = (bool) ($data['is_owner'] ?? false);
