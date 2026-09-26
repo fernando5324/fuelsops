@@ -322,6 +322,10 @@ body {
     color: var(--color-accent);
 }
 
+.ui-summary-value--gain {
+    color: var(--color-success);
+}
+
 .ui-summary-hint {
     display: block;
     margin-top: 2px;
@@ -446,6 +450,10 @@ body {
 
 .ui-filter-status {
     width: min(100%, 170px);
+}
+
+.ui-filter-entity {
+    width: min(100%, 260px);
 }
 
 .ui-filter-advisor {

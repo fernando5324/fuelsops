@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router } from '@inertiajs/react';
+import { usePage, router, Head } from '@inertiajs/react';
 import { Alert, App, Form, Input, Typography } from 'antd';
 import { MailOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -25,6 +25,7 @@ export default function ForgotPassword({ status }) {
 
     return (
         <AuthLayout subtitle={t('auth.forgot_password')}>
+            <Head title={t('auth.forgot_password')} />
             <Typography.Paragraph type="secondary">
                 {t('auth.forgot_password_hint')}
             </Typography.Paragraph>

@@ -1,11 +1,15 @@
 import { Card, Typography } from 'antd';
+import { usePage } from '@inertiajs/react';
 
 export default function AuthLayout({
-    heading = 'Sertoco',
+    heading,
     subtitle,
     width = 400,
     children,
 }) {
+    const { tenant } = usePage().props;
+    const brand = heading ?? tenant?.name ?? 'Sertoco';
+
     return (
         <div
             style={{
@@ -19,7 +23,7 @@ export default function AuthLayout({
         >
             <Card style={{ width, borderRadius: 12 }}>
                 <Typography.Title level={3} style={{ textAlign: 'center' }}>
-                    {heading}
+                    {brand}
                 </Typography.Title>
                 {subtitle && (
                     <Typography.Paragraph

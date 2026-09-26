@@ -17,7 +17,7 @@ class OrderStatusApiController extends Controller
     protected function rules(?Model $entity = null): array
     {
         return [
-            'code' => ['required', 'string', 'max:50', Rule::unique('order_statuses', 'code')->ignore($entity?->id)],
+            'code' => ['nullable', 'string', 'max:50', Rule::unique('order_statuses', 'code')->ignore($entity?->id)],
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:20'],

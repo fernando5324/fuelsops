@@ -13,16 +13,18 @@ import ProcessingOverlay from '@/Components/ProcessingOverlay';
 
 dayjs.locale('es');
 
-const appName = import.meta.env.VITE_APP_NAME || 'Sertoco';
+let brand = import.meta.env.VITE_APP_NAME || 'Sertoco';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (title ? `${title} - ${brand}` : brand),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,
             import.meta.glob('./Pages/**/*.jsx'),
         ),
     setup({ el, App, props }) {
+        brand = props.initialPage?.props?.tenant?.name || brand;
+
         const root = createRoot(el);
 
         root.render(

@@ -17,6 +17,7 @@ misma carpeta.
 | E. Validaciones y reglas        | Pendiente de confirmación con Sertoco |
 | F. Integraciones externas       | Backlog (futuro) |
 | G. Reportes y mejoras           | No iniciado |
+| H. Módulo de precios (ADR-010)  | Completado (Fases 1-7 + Fase 8 panel, verificado E2E sin residuos): modelo de datos (6 tablas, secciones 13-18 de `database.sql`), configuración sembrada, motor bcmath (`PriceCalculator` pasos 1-10 + `PricingResult`/`Decimal`/`PriceHistoryService`), **importación desde Excel** (`PricesImport` + `PriceImportService` upload/preview/confirm/cancel, `Platform/Pricing/PriceImportController`, `lang/es/pricing.php`, rutas `/precios/importar`, front `Platform/Pricing/Import.jsx` con catálogos nuevos por checkboxes y comparación Excel vs motor, menú "Precios") y **panel de administración** (`Platform/Pricing/PriceController` + `PriceApiController`, `PricingAdminService`, matriz en `Platform/Pricing/Index.jsx` con edición por modal + preview en vivo del motor, drawer de historial `price_calculations`, nueva relación y activar/desactivar; APIs `/api/pricing/*`; submenú Precios {Precios, Importar de Excel}; verificación E2E 18/18). Validado con el archivo real `docs/files/Pedidos.xlsx` (doble encabezado, plantas combinadas, motor == Excel con 0 mismatches). Pendiente: integración de `wholesaler_prices` con cotizaciones/pedidos (fuera de alcance, ADR-010 §32) y tablas de precios por cliente en el Excel final de Sertoco (§24-§26). Ver notas de implementación ADR-010 §33-§34 |
 
 ---
 
@@ -439,8 +440,8 @@ APIs vía `resources/js/Utils/Ajax.js` + un Service por módulo
 - [x] T-066 — Gestión de vehículos (vehicles).
     - Prioridad: Alta
     - Fase: D
-    - Criterio de aceptación: CRUD de tankera/tractora con placa única y
-      baja lógica.
+    - Criterio de aceptación: CRUD de tanquera/tractora con placa única por
+      tipo de vehículo y baja lógica.
 
 - [x] T-067 — Gestión de estados de pedido (alta de nuevos estados).
     - Prioridad: Media

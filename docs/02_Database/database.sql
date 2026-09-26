@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_vehicles_tenant_plate (tenant_id, license_plate),
+    UNIQUE KEY uq_vehicles_tenant_plate_type (tenant_id, license_plate, type),
 
     INDEX idx_vehicles_type (type),
     INDEX idx_vehicles_tenant (tenant_id),
@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 CREATE TABLE IF NOT EXISTS order_statuses (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
-    code VARCHAR(50) NOT NULL,
+    code VARCHAR(50) NULL,
     name VARCHAR(100) NOT NULL,
     description VARCHAR(255) NULL,
     color VARCHAR(20) NULL,
@@ -752,6 +752,411 @@ ADD CONSTRAINT fk_tenants_logo_media
     ON UPDATE CASCADE
     ON DELETE SET NULL;
 
+
+-- 13. PLANT PRODUCTS (ADR-010)
+
+CREATE TABLE IF NOT EXISTS plant_products (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    plant_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    UNIQUE KEY uq_plant_products_tenant_plant_product (tenant_id, plant_id, product_id),
+
+    INDEX idx_plant_products_tenant (tenant_id),
+    INDEX idx_plant_products_plant (plant_id),
+    INDEX idx_plant_products_product (product_id),
+    INDEX idx_plant_products_active (is_active),
+    INDEX idx_plant_products_created_by (created_by),
+    INDEX idx_plant_products_updated_by (updated_by),
+
+    CONSTRAINT fk_plant_products_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_plant_products_plant
+        FOREIGN KEY (plant_id)
+        REFERENCES plants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_plant_products_product
+        FOREIGN KEY (product_id)
+        REFERENCES products (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_plant_products_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_plant_products_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+
+-- 14. PRICE IMPORT BATCHES (ADR-010)
+
+CREATE TABLE IF NOT EXISTS price_import_batches (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    file_name VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+    total_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    new_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    updated_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    unchanged_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    error_rows INT UNSIGNED NOT NULL DEFAULT 0,
+
+    started_at DATETIME NULL DEFAULT NULL,
+    completed_at DATETIME NULL DEFAULT NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    INDEX idx_price_import_batches_tenant (tenant_id),
+    INDEX idx_price_import_batches_status (status),
+    INDEX idx_price_import_batches_created_by (created_by),
+    INDEX idx_price_import_batches_updated_by (updated_by),
+
+    CONSTRAINT fk_price_import_batches_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_import_batches_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_import_batches_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+
+-- 15. WHOLESALER PRICES (ADR-010)
+
+CREATE TABLE IF NOT EXISTS wholesaler_prices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    plant_product_id BIGINT UNSIGNED NOT NULL,
+    wholesaler_id BIGINT UNSIGNED NOT NULL,
+
+    price DECIMAL(12,4) NULL,
+
+    import_batch_id BIGINT UNSIGNED NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    UNIQUE KEY uq_wholesaler_prices_relation (tenant_id, plant_product_id, wholesaler_id),
+
+    INDEX idx_wholesaler_prices_tenant (tenant_id),
+    INDEX idx_wholesaler_prices_plant_product (plant_product_id),
+    INDEX idx_wholesaler_prices_wholesaler (wholesaler_id),
+    INDEX idx_wholesaler_prices_import_batch (import_batch_id),
+    INDEX idx_wholesaler_prices_created_by (created_by),
+    INDEX idx_wholesaler_prices_updated_by (updated_by),
+
+    CONSTRAINT fk_wholesaler_prices_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesaler_prices_plant_product
+        FOREIGN KEY (plant_product_id)
+        REFERENCES plant_products (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesaler_prices_wholesaler
+        FOREIGN KEY (wholesaler_id)
+        REFERENCES wholesalers (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesaler_prices_import_batch
+        FOREIGN KEY (import_batch_id)
+        REFERENCES price_import_batches (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesaler_prices_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_wholesaler_prices_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+
+-- 16. PRICE IMPORT ITEMS (ADR-010)
+
+CREATE TABLE IF NOT EXISTS price_import_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    import_batch_id BIGINT UNSIGNED NOT NULL,
+
+    `row_number` INT UNSIGNED NOT NULL,
+
+    plant_name VARCHAR(150) NOT NULL,
+    product_name VARCHAR(150) NOT NULL,
+    wholesaler_name VARCHAR(150) NOT NULL,
+
+    previous_price DECIMAL(12,4) NULL,
+    new_price DECIMAL(12,4) NULL,
+
+    status VARCHAR(20) NOT NULL,
+    error_message TEXT NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    INDEX idx_price_import_items_tenant (tenant_id),
+    INDEX idx_price_import_items_batch (import_batch_id),
+    INDEX idx_price_import_items_status (status),
+    INDEX idx_price_import_items_created_by (created_by),
+    INDEX idx_price_import_items_updated_by (updated_by),
+
+    CONSTRAINT fk_price_import_items_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_import_items_batch
+        FOREIGN KEY (import_batch_id)
+        REFERENCES price_import_batches (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_import_items_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_import_items_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+
+-- 17. PRICING CONFIGURATIONS (ADR-010)
+
+CREATE TABLE IF NOT EXISTS pricing_configurations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    name VARCHAR(150) NOT NULL,
+
+    margin DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+    igv_rate DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+    perception_rate DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    effective_from DATETIME NULL DEFAULT NULL,
+    effective_until DATETIME NULL DEFAULT NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    INDEX idx_pricing_configurations_tenant (tenant_id),
+    INDEX idx_pricing_configurations_active (is_active),
+    INDEX idx_pricing_configurations_created_by (created_by),
+    INDEX idx_pricing_configurations_updated_by (updated_by),
+
+    CONSTRAINT fk_pricing_configurations_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_pricing_configurations_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_pricing_configurations_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+
+-- 18. PRICE CALCULATIONS (ADR-010) — append-only: snapshot histórico inmutable
+
+CREATE TABLE IF NOT EXISTS price_calculations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    plant_product_id BIGINT UNSIGNED NOT NULL,
+    wholesaler_price_id BIGINT UNSIGNED NOT NULL,
+    pricing_configuration_id BIGINT UNSIGNED NOT NULL,
+
+    calculation_version VARCHAR(20) NOT NULL,
+
+    calculation_data JSON NOT NULL,
+
+    calculated_at DATETIME NOT NULL COMMENT 'Fecha y hora del cálculo en America/Lima',
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT UNSIGNED NOT NULL,
+
+    INDEX idx_price_calculations_tenant (tenant_id),
+    INDEX idx_price_calculations_plant_product (plant_product_id),
+    INDEX idx_price_calculations_wholesaler_price (wholesaler_price_id),
+    INDEX idx_price_calculations_configuration (pricing_configuration_id),
+    INDEX idx_price_calculations_calculated_at (calculated_at),
+    INDEX idx_price_calculations_created_by (created_by),
+
+    CONSTRAINT fk_price_calculations_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_calculations_plant_product
+        FOREIGN KEY (plant_product_id)
+        REFERENCES plant_products (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_calculations_wholesaler_price
+        FOREIGN KEY (wholesaler_price_id)
+        REFERENCES wholesaler_prices (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_calculations_configuration
+        FOREIGN KEY (pricing_configuration_id)
+        REFERENCES pricing_configurations (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_price_calculations_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- 19. ORDER DELETIONS (ADR-011)
+
+-- Registro histórico de cada eliminación lógica de un pedido (papelera).
+-- No es una tabla de "estado": un pedido con orders.is_deleted = 1 tiene un
+-- registro con restored_at IS NULL. Al restaurar se cierra ese registro; una
+-- nueva eliminación crea otro registro (historial completo por pedido).
+-- Este registro es permanente: nunca se elimina físicamente.
+
+CREATE TABLE IF NOT EXISTS order_deletions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NOT NULL,
+
+    reason VARCHAR(500) NOT NULL,
+
+    deleted_at DATETIME NOT NULL,
+    deleted_by BIGINT UNSIGNED NOT NULL,
+
+    snapshot JSON NULL,
+
+    affected_media_ids JSON NULL COMMENT 'ids de media_files marcados como is_deleted=1 en esta eliminación (para restaurar solo los afectados)',
+
+    restored_at DATETIME NULL,
+    restored_by BIGINT UNSIGNED NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    INDEX idx_order_deletions_tenant (tenant_id),
+    INDEX idx_order_deletions_order (order_id),
+    INDEX idx_order_deletions_deleted_by (deleted_by),
+    INDEX idx_order_deletions_deleted_at (deleted_at),
+    INDEX idx_order_deletions_restored_by (restored_by),
+
+    CONSTRAINT fk_order_deletions_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deletions_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deletions_deleted_by
+        FOREIGN KEY (deleted_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deletions_restored_by
+        FOREIGN KEY (restored_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deletions_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deletions_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
 -- PROVISIONAL ORDER CALCULATIONS
 --
 -- Total gallons:
@@ -808,3 +1213,10 @@ VALUES
     (1, 1, 'pending', 'Pendiente', 'Pedido registrado desde el formulario público, pendiente de atención.', 'orange', 1, 1, 999999),
     (2, 1, 'attended', 'Atendido', 'Pedido atendido por Sertoco.', 'green', 0, 1, 999999),
     (3, 1, 'cancelled', 'Anulado', 'Pedido anulado.', 'red', 0, 1, 999999);
+
+
+-- Pricing configuration (ADR-010). Módulo de precios: parámetros del motor de cálculo.
+-- Porcentajes como valores decimales: margen 13%, IGV 18%, percepción 1%.
+
+INSERT INTO pricing_configurations (id, tenant_id, name, margin, igv_rate, perception_rate, is_active, effective_from, created_by)
+VALUES (1, 1, 'Configuración estándar', 0.1300, 0.1800, 0.0100, 1, NOW(), 999999);

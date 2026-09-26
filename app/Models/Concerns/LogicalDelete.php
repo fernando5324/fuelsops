@@ -21,6 +21,24 @@ trait LogicalDelete
         });
     }
 
+    /**
+     * Consulta incluyendo registros eliminados (sin el scope global).
+     */
+    public function scopeWithDeleted(Builder $builder): Builder
+    {
+        return $builder->withoutGlobalScope('not_deleted');
+    }
+
+    /**
+     * Consulta SÓLO registros eliminados (is_deleted = 1).
+     */
+    public function scopeOnlyDeleted(Builder $builder): Builder
+    {
+        return $builder
+            ->withoutGlobalScope('not_deleted')
+            ->where($builder->qualifyColumn('is_deleted'), 1);
+    }
+
     public function delete(): bool
     {
         if ($this->fireModelEvent('deleting') === false) {

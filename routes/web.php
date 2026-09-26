@@ -10,12 +10,16 @@ use App\Http\Controllers\Platform\Drivers\DriverController;
 use App\Http\Controllers\Platform\Media\MediaController;
 use App\Http\Controllers\Platform\Orders\OrderApiController;
 use App\Http\Controllers\Platform\Orders\OrderController;
+use App\Http\Controllers\Platform\Orders\TrashController;
 use App\Http\Controllers\Platform\OrderStatuses\OrderStatusApiController;
 use App\Http\Controllers\Platform\OrderStatuses\OrderStatusController;
 use App\Http\Controllers\Platform\Plants\PlantApiController;
 use App\Http\Controllers\Platform\Plants\PlantController;
 use App\Http\Controllers\Platform\Products\ProductApiController;
 use App\Http\Controllers\Platform\Products\ProductController;
+use App\Http\Controllers\Platform\Pricing\PriceApiController;
+use App\Http\Controllers\Platform\Pricing\PriceController;
+use App\Http\Controllers\Platform\Pricing\PriceImportController;
 use App\Http\Controllers\Platform\Users\UserApiController;
 use App\Http\Controllers\Platform\Users\UserController;
 use App\Http\Controllers\Platform\Vehicles\VehicleApiController;
@@ -67,6 +71,12 @@ Route::middleware('auth')->group(function () {
 
     // Pedidos del panel (vistas)
     Route::get('/pedidos', [OrderController::class, 'index'])->name('pedidos.index');
+
+    // Papelera de pedidos (ADR-011). Deben declararse ANTES de /pedidos/{order}
+    // para que "papelera" no se interprete como id de pedido.
+    Route::get('/pedidos/papelera', [TrashController::class, 'index'])->name('pedidos.papelera.index');
+    Route::get('/pedidos/papelera/{order}', [TrashController::class, 'show'])->name('pedidos.papelera.show');
+
     Route::get('/pedidos/{order}', [OrderController::class, 'show'])->name('pedidos.show');
     Route::get('/pedidos/{order}/editar', [OrderController::class, 'edit'])->name('pedidos.edit');
     Route::put('/pedidos/{order}', [OrderController::class, 'update'])->name('pedidos.update');
@@ -88,6 +98,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [UserController::class, 'index'])->name('index');
     });
 
+    // Precios: panel de administración + importación desde Excel (ADR-010)
+    Route::prefix('precios')->name('pricing.')->group(function () {
+        Route::get('/', [PriceController::class, 'index'])->name('admin');
+        Route::get('exportar', [PriceController::class, 'export'])->name('export');
+        Route::get('importar', [PriceImportController::class, 'index'])->name('index');
+        Route::post('importar', [PriceImportController::class, 'store'])->name('upload');
+        Route::get('importar/{batch}/preview', [PriceImportController::class, 'preview'])->name('preview');
+        Route::post('importar/{batch}', [PriceImportController::class, 'confirm'])->name('confirm');
+        Route::post('importar/{batch}/cancelar', [PriceImportController::class, 'cancel'])->name('cancel');
+    });
+
     // Perfil
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -106,6 +127,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('api')->name('api.')->group(function () {
         Route::get('orders/{order}/detail', [OrderApiController::class, 'detail'])->name('orders.detail');
         Route::post('orders/{order}/status', [OrderApiController::class, 'changeStatus'])->name('orders.status');
+        Route::post('orders/{order}/trash', [OrderApiController::class, 'trash'])->name('orders.trash');
+        Route::post('orders/trash/{order}/restore', [OrderApiController::class, 'restore'])->name('orders.restore');
 
         Route::post('advisors', [AdvisorApiController::class, 'store'])->name('advisors.store');
         Route::put('advisors/{advisor}', [AdvisorApiController::class, 'update'])->name('advisors.update');
@@ -142,6 +165,15 @@ Route::middleware('auth')->group(function () {
         Route::post('users', [UserApiController::class, 'store'])->name('users.store');
         Route::put('users/{user}', [UserApiController::class, 'update'])->name('users.update');
         Route::delete('users/{user}', [UserApiController::class, 'destroy'])->name('users.destroy');
+
+        // Precios: preview del motor + CRUD de precios y relaciones (ADR-010, Fases 8+)
+        Route::post('pricing/prices/preview', [PriceApiController::class, 'preview'])->name('pricing.prices.preview');
+        Route::post('pricing/prices', [PriceApiController::class, 'store'])->name('pricing.prices.store');
+        Route::put('pricing/prices/{wholesaler_price}', [PriceApiController::class, 'update'])->name('pricing.prices.update');
+        Route::delete('pricing/prices/{wholesaler_price}', [PriceApiController::class, 'destroy'])->name('pricing.prices.destroy');
+        Route::post('pricing/relations', [PriceApiController::class, 'storeRelation'])->name('pricing.relations.store');
+        Route::put('pricing/relations/{plant_product}', [PriceApiController::class, 'updateRelation'])->name('pricing.relations.update');
+        Route::get('pricing/relations/{plant_product}/history', [PriceApiController::class, 'history'])->name('pricing.relations.history');
     });
 });
 

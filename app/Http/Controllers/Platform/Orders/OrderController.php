@@ -97,6 +97,8 @@ class OrderController extends Controller
             'createdBy:id,name',
         ]);
 
+        $orders->attachPurchasePrices($order);
+
         return Inertia::render('Platform/Orders/Show', [
             'order' => $order,
             'totals' => $orders->totals($order),

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router } from '@inertiajs/react';
+import { usePage, router, Head } from '@inertiajs/react';
 import { App, Form, Input, Typography } from 'antd';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -25,6 +25,7 @@ export default function ResetPassword({ token, email }) {
 
     return (
         <AuthLayout subtitle={t('auth.reset_password')}>
+            <Head title={t('auth.reset_password')} />
             <Typography.Paragraph type="secondary">
                 {t('auth.forgot_password_hint')}
             </Typography.Paragraph>

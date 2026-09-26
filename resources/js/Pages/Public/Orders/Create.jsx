@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { router, usePage } from '@inertiajs/react';
+import { router, usePage, Head } from '@inertiajs/react';
 import {
     Alert,
     App,
@@ -220,6 +220,7 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
 
     return (
         <div className="ui-page-bg">
+            <Head title={t('order.public_form_title')} />
             <PublicHeader />
 
             <div className="ui-page">

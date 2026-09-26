@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, Head } from '@inertiajs/react';
 import {
     Button,
     Card,
@@ -36,6 +36,7 @@ export default function PublicOrderConfirmed({ order, totals }) {
 
     return (
         <div className="ui-page-bg">
+            <Head title={t('order.confirmed_title')} />
             <PublicHeader />
 
             <div className="ui-page ui-page--confirmed">

@@ -53,6 +53,9 @@ in the internal panel (Ant Design). See `ADR-004.md` and `05_Tasks/`.
 
 ## Documentation
 
+-   `01_Architecture/architecture.md` --- Blueprint generalizado de
+    arquitectura (stack, estructura de carpetas, patrón de
+    controladores/APIs/servicios, naming, frontend, multitenancy listo).
 -   `database_design.md` --- Current database structure and
     relationships.
 -   `database.sql` --- Canonical schema (fresh install).

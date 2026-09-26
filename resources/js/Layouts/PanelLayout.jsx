@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import { Layout, Menu, Dropdown, Space, Avatar, theme } from 'antd';
 import {
@@ -17,6 +17,7 @@ import {
     HomeOutlined,
     TagsOutlined,
     TagOutlined,
+    MoneyCollectOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
 import logo from '../../images/logo.png';
@@ -42,7 +43,7 @@ function iconFor(index) {
 }
 
 export default function PanelLayout({ children }) {
-    const { auth } = usePage().props;
+    const { auth, tenant } = usePage().props;
     const user = auth?.user;
     const { t } = useTranslations();
     const path = window.location.pathname;
@@ -63,7 +64,15 @@ export default function PanelLayout({ children }) {
 
     const items = [
         { key: 'dashboard', icon: <DashboardOutlined />, label: <Link href="/panel">{t('menus.dashboard')}</Link> },
-        { key: 'pedidos', icon: <FileTextOutlined />, label: <Link href="/pedidos">{t('menus.orders')}</Link> },
+        {
+            key: 'pedidos',
+            icon: <FileTextOutlined />,
+            label: t('menus.orders'),
+            children: [
+                { key: 'pedidos-list', label: <Link href="/pedidos">{t('menus.orders')}</Link> },
+                { key: 'papelera', label: <Link href="/pedidos/papelera">{t('menus.trash')}</Link> },
+            ],
+        },
         {
             key: 'catalogos',
             icon: <AppstoreOutlined />,
@@ -71,16 +80,42 @@ export default function PanelLayout({ children }) {
             children: catalogLinks,
         },
         { key: 'usuarios', icon: <TeamOutlined />, label: <Link href="/usuarios">{t('menus.users')}</Link> },
+        {
+            key: 'precios',
+            icon: <MoneyCollectOutlined />,
+            label: t('menus.pricing'),
+            children: [
+                { key: 'precios-admin', label: <Link href="/precios">{t('menus.pricing')}</Link> },
+                { key: 'precios-import', label: <Link href="/precios/importar">{t('menus.pricing_import')}</Link> },
+            ],
+        },
     ];
 
     let selectedKey = 'dashboard';
-    if (path.startsWith('/pedidos')) {
+    if (path.startsWith('/pedidos/papelera')) {
+        selectedKey = 'papelera';
+    } else if (path.startsWith('/pedidos')) {
         selectedKey = 'pedidos';
     } else if (path.startsWith('/catalogos')) {
         selectedKey = 'catalogos';
     } else if (path.startsWith('/usuarios')) {
         selectedKey = 'usuarios';
+    } else if (path.startsWith('/precios/importar')) {
+        selectedKey = 'precios-import';
+    } else if (path.startsWith('/precios')) {
+        selectedKey = 'precios-admin';
     }
+
+    const [openKeys, setOpenKeys] = useState(['catalogos', path.startsWith('/pedidos') ? 'pedidos' : null, path.startsWith('/precios') ? 'precios' : null].filter(Boolean));
+
+    useEffect(() => {
+        setOpenKeys((prev) => {
+            const next = new Set(prev);
+            if (path.startsWith('/pedidos')) next.add('pedidos');
+            if (path.startsWith('/precios')) next.add('precios');
+            return [...next];
+        });
+    }, [path]);
 
     const userMenu = {
         items: [
@@ -116,13 +151,14 @@ export default function PanelLayout({ children }) {
                     }}
                 >
                     <TagOutlined />
-                    {import.meta.env.VITE_APP_NAME}
+                    {tenant?.name}
                 </div>
                 <Menu
                     theme="dark"
                     mode="inline"
                     selectedKeys={[selectedKey]}
-                    defaultOpenKeys={['catalogos']}
+                    openKeys={openKeys}
+                    onOpenChange={setOpenKeys}
                     items={items}
                 />
             </Sider>

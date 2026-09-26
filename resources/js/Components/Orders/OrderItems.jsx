@@ -33,7 +33,12 @@ export default function OrderItems({ order, totals }) {
             title: t('order.purchase_price'),
             width: 130,
             align: 'right',
-            render: () => <span className="ui-order-empty">—</span>,
+            render: (_, r) =>
+                r.purchase_price == null ? (
+                    <span className="ui-order-empty">—</span>
+                ) : (
+                    formatMoney(r.purchase_price, { digits: 4 })
+                ),
         },
         {
             title: t('order.compartments'),

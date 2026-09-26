@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router } from '@inertiajs/react';
+import { usePage, router, Head } from '@inertiajs/react';
 import { App, Checkbox, Form, Input } from 'antd';
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -25,6 +25,7 @@ export default function Login() {
 
     return (
         <AuthLayout subtitle={t('auth.login')}>
+            <Head title={t('auth.login')} />
             <Form layout="vertical" onFinish={onFinish} autoComplete="off">
                 <Form.Item
                     name="email"

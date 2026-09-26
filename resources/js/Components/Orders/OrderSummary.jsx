@@ -7,6 +7,9 @@ export default function OrderSummary({ totals, compact = false }) {
 
     const totalGallons = Number(totals?.total_gallons ?? 0);
     const totalSale = Number(totals?.total_sale ?? 0);
+    const totalPurchase = totals?.total_purchase ?? null;
+    const gain = totals?.gain ?? null;
+    const margin = totals?.margin ?? null;
 
     return (
         <SectionCard title={t('order.financial')}>
@@ -26,16 +29,36 @@ export default function OrderSummary({ totals, compact = false }) {
                 </div>
                 <div className="ui-summary-item">
                     <span className="ui-summary-label">{t('order.purchase')}</span>
-                    <span className="ui-summary-value ui-order-empty">—</span>
+                    {totalPurchase === null ? (
+                        <span className="ui-summary-value ui-order-empty">—</span>
+                    ) : (
+                        <span className="ui-summary-value">{formatMoney(totalPurchase)}</span>
+                    )}
                 </div>
                 <div className="ui-summary-item">
                     <span className="ui-summary-label">{t('order.gain')}</span>
-                    <span className="ui-summary-value ui-order-empty">—</span>
+                    {gain === null ? (
+                        <span className="ui-summary-value ui-order-empty">—</span>
+                    ) : (
+                        <span className="ui-summary-value ui-summary-value--gain">
+                            {formatMoney(gain)}
+                        </span>
+                    )}
                 </div>
                 {!compact ? (
                     <div className="ui-summary-item">
                         <span className="ui-summary-label">{t('order.margin')}</span>
-                        <span className="ui-summary-value ui-order-empty">—</span>
+                        {margin === null ? (
+                            <span className="ui-summary-value ui-order-empty">—</span>
+                        ) : (
+                            <span className="ui-summary-value ui-summary-value--gain">
+                                {Number(margin).toLocaleString('es-ES', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                                <span className="ui-summary-unit"> %</span>
+                            </span>
+                        )}
                     </div>
                 ) : null}
             </div>

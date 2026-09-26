@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Tenant;
+use App\Services\TenantContext;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -34,6 +36,15 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'tenant' => function () {
+                $tenant = Tenant::find(TenantContext::id());
+
+                return [
+                    'id' => $tenant?->id ?? TenantContext::id(),
+                    'name' => $tenant?->name ?? config('app.name', 'Laravel'),
+                    'slug' => $tenant?->slug ?? config('sertoco.default_tenant_slug'),
+                ];
+            },
             'flash' => fn () => $request->session()->get('flash'),
             'locale' => fn () => app()->getLocale(),
             'translations' => fn () => collect(glob(lang_path(app()->getLocale()).'/*.php'))

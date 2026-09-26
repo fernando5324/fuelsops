@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router, Link } from '@inertiajs/react';
+import { usePage, router, Link, Head } from '@inertiajs/react';
 import { App, Form, Input } from 'antd';
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -23,6 +23,7 @@ export default function Register() {
 
     return (
         <AuthLayout subtitle={t('auth.register')} width={420}>
+            <Head title={t('auth.register')} />
             <Form layout="vertical" onFinish={onFinish} autoComplete="off">
                 <Form.Item
                     name="first_name"

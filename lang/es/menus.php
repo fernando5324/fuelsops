@@ -3,6 +3,7 @@
 return [
     'dashboard' => 'Panel',
     'orders' => 'Pedidos',
+    'trash' => 'Papelera',
     'catalogs' => 'Catálogos',
     'advisors' => 'Asesores',
     'wholesalers' => 'Mayoristas',
@@ -13,6 +14,8 @@ return [
     'vehicles' => 'Vehículos',
     'order_statuses' => 'Estados de pedido',
     'users' => 'Usuarios',
+    'pricing' => 'Precios',
+    'pricing_import' => 'Importar de Excel',
     'profile' => 'Perfil',
     'settings' => 'Configuración',
     'reports' => 'Reportes',

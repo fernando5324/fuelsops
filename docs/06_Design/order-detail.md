@@ -195,6 +195,21 @@ S/ 520.00
 ```
 Estos valores deben presentarse visualmente como resumen y no como una tabla extensa.
 
+> Estado actual — implementado: la columna **Precio de compra** del detalle se
+> calcula desde el módulo de precios (ADR-010): la celda `wholesaler_prices`
+> de la relación (planta+producto × mayorista) de cada línea, tomando
+> `MIN(price)` entre los precios válidos (> 0) de esa combinación. Si no hay
+> precio (celda vacía o 0), la columna muestra **"-"** sin omitir la línea en
+> los totales. La relación planta+producto se consulta aunque esté inactiva
+> (`is_active = 0`): se trata de un dato de referencia del momento del pedido.
+> El resumen muestra además **Compra** (Σ galones × precio de compra), la
+> **Ganancia** (Venta − Compra) y el **Margen** (% sobre la venta), todos con
+> precisión bcmath. Si ninguna línea tiene precio de compra registrado, el
+> resumen muestra "-" para Compra/Ganancia/Margen (evita una "ganancia = venta
+> completa" engañosa). Backend: `OrderService::attachPurchasePrices()` y
+> `totals()` (claves `total_purchase`/`gain`/`margin`) invocados en el `show`
+> del detalle. Verificado E2E (`verify_order_purchase_price.php`, 31/31).
+
 Información operativa
 
 Mostrar de forma compacta:

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router, Link } from '@inertiajs/react';
+import { usePage, router, Link, Head } from '@inertiajs/react';
 import { Alert, App, Form, Typography } from 'antd';
 import useTranslations from '@/hooks/useTranslations';
 import SubmitButton from '@/Components/SubmitButton';
@@ -24,6 +24,7 @@ export default function VerifyEmail({ status }) {
 
     return (
         <AuthLayout subtitle={t('auth.verify_email')}>
+            <Head title={t('auth.verify_email')} />
             <Typography.Paragraph type="secondary">
                 {t('auth.verify_email_hint')}
             </Typography.Paragraph>

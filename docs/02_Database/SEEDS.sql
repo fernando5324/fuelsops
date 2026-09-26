@@ -99,3 +99,12 @@ INSERT IGNORE INTO order_details (id, tenant_id, order_id, scop, plant_id, whole
 -- Historial de estado para el pedido de muestra atendido.
 INSERT IGNORE INTO order_status_history (id, tenant_id, order_id, status_id, previous_status_id, notes, created_by) VALUES
     (1, 1, 2, 2, 1, 'Pedido atendido por Sertoco.', 1);
+
+-- ---------------------------------------------------------------------------
+-- Configuración de precios (ADR-010)
+-- ---------------------------------------------------------------------------
+-- Parámetros del motor de cálculo. Los porcentajes se guardan como decimal:
+-- margen 13%, IGV 18%, percepción 1%.
+
+INSERT IGNORE INTO pricing_configurations (id, tenant_id, name, margin, igv_rate, perception_rate, is_active, effective_from, created_by)
+VALUES (1, 1, 'Configuración estándar', 0.1300, 0.1800, 0.0100, 1, NOW(), 1);

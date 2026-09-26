@@ -76,6 +76,25 @@ class Order extends Model
         return $this->morphMany(MediaFile::class, 'model');
     }
 
+    public function deletions(): HasMany
+    {
+        return $this->hasMany(OrderDeletion::class, 'order_id')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Eliminación activa (sin restaurar) del pedido, si existe. Un pedido
+     * activo SIEMPRE tiene una (restored_at IS NULL); al restaurar debe
+     * resolverse y cerrarse aquí.
+     */
+    public function currentDeletion(): ?OrderDeletion
+    {
+        return $this->deletions()
+            ->whereNull('restored_at')
+            ->with('deletedBy:id,name')
+            ->first();
+    }
+
     public function getTotalGallonsAttribute(): float
     {
         return round($this->details->sum('gallons'), 2);

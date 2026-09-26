@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { usePage, router } from '@inertiajs/react';
+import { usePage, router, Head } from '@inertiajs/react';
 import { App, Form, Input, Typography } from 'antd';
 import { LockOutlined } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -25,6 +25,7 @@ export default function ConfirmPassword() {
 
     return (
         <AuthLayout subtitle={t('auth.confirm_password')}>
+            <Head title={t('auth.confirm_password')} />
             <Typography.Paragraph type="secondary">
                 {t('auth.confirm_password_hint')}
             </Typography.Paragraph>

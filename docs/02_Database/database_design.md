@@ -83,9 +83,11 @@ Current rules:
     user `sistema` does not belong to any organization). Every query is
     filtered by the current organization at the application level.
 -   Uniqueness rules are **per organization**: RUC (customers), license
-    number (drivers), license plate (vehicles) and status code
-    (order_statuses) are unique within the tenant, so different organizations
-    may share the same values.
+    number (drivers), license plate per vehicle type (vehicles) and status
+    code (order_statuses) are unique within the tenant, so different
+    organizations may share the same values. A vehicle is identified by
+    plate + type: the same plate may be registered both as tanker and as
+    tractor.
 -   `order_statuses` is an organization-level catalog: each tenant has its own
     statuses (initially pending/attended/cancelled seeded for Sertoco).
 -   The main organization is **Sertoco** (id 1); all current seed data belongs
@@ -195,6 +197,42 @@ definitive rule.
 
 Totals are calculated from order details instead of being stored as
 independent order fields.
+
+## Pricing (ADR-010)
+
+The pricing module separates source data, configuration, imports, and
+historical results (see `docs/03_Decisions/ADR-010.md`).
+
+Existing catalogs `plants`, `wholesalers` and `products` are reused; no
+parallel catalogs are created.
+
+New tables:
+
+-   `plant_products`: which products are available on each plant
+    (unique per tenant/plant/product, `is_active`). Not all products
+    exist on all plants.
+-   `wholesaler_prices`: price offered by each wholesaler for a
+    plant+product (unique per tenant/plant_product/wholesaler).
+    `price DECIMAL(12,4)` is NULL when the wholesaler has no price for
+    that product; an empty cell never means price `0`. `import_batch_id`
+    links to the import that created/updated the price.
+-   `price_import_batches` / `price_import_items`: audit of Excel
+    imports. The batch holds the summary (file, status, total/new/
+    updated/unchanged/error rows); each item keeps the per-row result
+    (`new`, `updated`, `unchanged`, `error`) with previous/new price and
+    error message, enabling preview before confirming an import.
+-   `pricing_configurations`: calculation parameters stored as decimals
+    (`margin`, `igv_rate`, `perception_rate`), active flag and
+    `effective_from`/`effective_until` for future versioning. Default
+    values: margin 0.13, IGV 0.18, perception 0.01.
+-   `price_calculations`: append-only history of every confirmed
+    calculation. Stores `calculation_data` as an immutable JSON snapshot
+    with the exact values used at that moment (best wholesaler price,
+    margin, IGV, perception and all intermediate/final results).
+
+All tables are multi-tenant (`tenant_id`) and follow the audit-field and
+`ON DELETE RESTRICT` conventions of the project. Monetary amounts are
+stored as `DECIMAL(12,4)` and processed with bcmath (never float/double).
 
 ## Order files
 
