@@ -52,7 +52,7 @@ return [
 
     // Comparación con el motor
     'calc_title' => 'Comparación con el motor',
-    'calc_active' => 'Columna V del Excel vs. cálculo del sistema con los precios del archivo.',
+    'calc_active' => 'Columna V del Excel vs. cálculo del sistema con los precios del archivo y el margen de la columna R.',
     'calc_inactive' => 'No hay una configuración de precios activa; no se puede mostrar el cálculo del sistema.',
     'calc_mismatches' => '{count} fila(s) con diferencia respecto al cálculo del sistema.',
     'calc_match' => 'Coincide',
@@ -91,6 +91,10 @@ return [
     'winner' => 'Gana',
     'edit_prices' => 'Editar precios',
     'edit_prices_title' => 'Editar precios',
+    // Menú desplegable de la columna Acciones (antd Dropdown). El Switch
+    // activar/desactivar queda fuera del menú, es un control de estado.
+    'more_actions' => 'Más acciones',
+    'no_calc_short' => 'Sin cálculo',
     'history' => 'Historial',
     'history_title' => 'Historial de precios',
     'history_empty' => 'Aún no hay cálculos registrados para esta relación.',
@@ -115,13 +119,26 @@ return [
     'col_calculated_at' => 'Calculado el',
     'col_winner' => 'Mayorista ganador',
     'col_margin' => 'Margen (R)',
+    // Margen por relación planta+producto (columna R del Excel). Es un monto
+    // absoluto en S/, no una tasa, y puede variar por fila.
+    'margin_col' => 'Margen (S/)',
+    'margin_field' => 'Margen (S/)',
+    'margin_hint' => 'Monto en soles que se suma al precio sin IGV de esta planta y producto (S = Q + margen). Acepta hasta 4 decimales.',
+    'margin_default_hint' => 'Por defecto se usa el margen de la configuración de precios.',
+    'margin_col_import' => 'Margen (R)',
     'config_none' => 'No hay una configuración de precios activa para esta organización: el motor no puede calcular.',
     'updated_ok' => 'Precios guardados y recalculados correctamente.',
     'activated_ok' => 'Relación activada.',
     'deactivated_ok' => 'Relación desactivada.',
     'relation_created' => 'Relación creada o reactivada correctamente.',
+    // Baja lógica de la relación (is_deleted); solo el dueño (is_owner).
+    'delete_relation' => 'Eliminar relación',
+    'delete_relation_confirm' => '¿Eliminar esta relación?',
+    'delete_relation_warning' => 'Se eliminará de la matriz, pero sus precios y su historial de cálculos se conservan. Si la vuelves a crear, recuperará lo que tenía.',
+    'relation_deleted' => 'Relación eliminada correctamente.',
     'invalid_relation' => 'La planta o el producto indicados no son válidos.',
     'invalid_wholesaler' => 'Uno de los mayoristas indicados no es válido.',
+    'invalid_margin' => 'El margen debe ser un número mayor o igual a 0 (hasta 4 decimales).',
 
     // ─────────────────────────────────────────────────────────────────────────
     // ADR-012: visualización de los cálculos (niveles 1-3 + fórmula)
@@ -163,6 +180,7 @@ return [
         'price_zero' => 'Precio 0 no permitido (celda vacía = sin precio).',
         'price_negative' => 'Precio negativo no permitido.',
         'price_invalid' => 'Valor de precio no numérico.',
+        'invalid_margin' => 'Margen (columna R) no válido: debe ser un número mayor o igual a 0.',
         'catalog_not_confirmed' => 'Catálogo no confirmado para crear.',
     ],
 ];

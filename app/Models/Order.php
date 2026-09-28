@@ -71,6 +71,18 @@ class Order extends Model
             ->orderByDesc('id');
     }
 
+    /**
+     * Depósitos del cliente registrados manualmente desde los vouchers
+     * adjuntos (ADR-013). Se listan del más reciente al más antiguo y el total
+     * se calcula en pantalla.
+     */
+    public function deposits(): HasMany
+    {
+        return $this->hasMany(OrderDeposit::class, 'order_id')
+            ->orderByDesc('deposit_date')
+            ->orderByDesc('id');
+    }
+
     public function files(): MorphMany
     {
         return $this->morphMany(MediaFile::class, 'model');

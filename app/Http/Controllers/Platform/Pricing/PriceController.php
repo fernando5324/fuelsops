@@ -144,6 +144,7 @@ class PriceController extends Controller
             'plant_name' => $pp->plant?->name,
             'product_name' => $pp->product?->name,
             'is_active' => (bool) $pp->is_active,
+            'margin' => (string) $pp->margin,
             'prices' => $pp->wholesalerPrices
                 ->mapWithKeys(fn ($wp) => [(int) $wp->wholesaler_id => $wp->price])
                 ->toArray(),
@@ -185,6 +186,12 @@ class PriceController extends Controller
         ];
     }
 
+    /**
+     * Configuración activa, con `margin` como **default** para crear relaciones
+     * (`config.default_margin`) y `default_margin` como alias explícito para la
+     * UI: desde ADR-010 §29 el margen que usa el motor es el de cada relación
+     * (`plant_products.margin`), no el global.
+     */
     private function activeConfig(PricingAdminService $pricing): ?array
     {
         try {
@@ -195,6 +202,7 @@ class PriceController extends Controller
 
         return [
             'margin' => (string) $config->margin,
+            'default_margin' => (string) $config->margin,
             'igv_rate' => (string) $config->igv_rate,
             'perception_rate' => (string) $config->perception_rate,
         ];

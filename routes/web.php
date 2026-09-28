@@ -127,6 +127,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('api')->name('api.')->group(function () {
         Route::get('orders/{order}/detail', [OrderApiController::class, 'detail'])->name('orders.detail');
         Route::post('orders/{order}/status', [OrderApiController::class, 'changeStatus'])->name('orders.status');
+        Route::post('orders/{order}/deposits', [OrderApiController::class, 'storeDeposit'])->name('orders.deposits.store');
+        Route::delete('orders/{order}/deposits/{deposit}', [OrderApiController::class, 'destroyDeposit'])->name('orders.deposits.destroy');
         Route::post('orders/{order}/trash', [OrderApiController::class, 'trash'])->name('orders.trash');
         Route::post('orders/trash/{order}/restore', [OrderApiController::class, 'restore'])->name('orders.restore');
 
@@ -173,6 +175,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('pricing/prices/{wholesaler_price}', [PriceApiController::class, 'destroy'])->name('pricing.prices.destroy');
         Route::post('pricing/relations', [PriceApiController::class, 'storeRelation'])->name('pricing.relations.store');
         Route::put('pricing/relations/{plant_product}', [PriceApiController::class, 'updateRelation'])->name('pricing.relations.update');
+        Route::delete('pricing/relations/{plant_product}', [PriceApiController::class, 'destroyRelation'])->name('pricing.relations.destroy');
         Route::get('pricing/relations/{plant_product}/history', [PriceApiController::class, 'history'])->name('pricing.relations.history');
     });
 });

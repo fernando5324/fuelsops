@@ -91,17 +91,21 @@ class OrderController extends Controller
             'details.wholesaler',
             'details.product',
             'files',
+            'deposits.createdBy:id,name',
             'statusHistory.status',
             'statusHistory.previousStatus',
             'statusHistory.createdBy:id,name',
             'createdBy:id,name',
         ]);
 
-        $orders->attachPurchasePrices($order);
+        // Precios de compra, márgenes de la relación y monto margen × galones
+        // por detalle (ADR-010 §35 / ADR-013): atributos no persistidos.
+        $orders->attachPricing($order);
 
         return Inertia::render('Platform/Orders/Show', [
             'order' => $order,
             'totals' => $orders->totals($order),
+            'supplier_payables' => $orders->supplierPayables($order),
             'statuses' => $orders->statuses(),
         ]);
     }

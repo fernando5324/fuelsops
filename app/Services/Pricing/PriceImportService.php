@@ -51,6 +51,13 @@ class PriceImportService
     /** Índice 0-based de la columna derivada V (precio final del Excel). */
     public const EXCEL_FINAL_COLUMN = 21;
 
+    /**
+     * Índice 0-based de la columna R del Excel ("MARGEN SERTOCO"): el margen
+     * S/ de esa planta+producto. Varía por fila, así que cada relación puede
+     * tener un margen distinto (0.13, 0.18, o el que corresponda).
+     */
+    public const EXCEL_MARGIN_COLUMN = 17;
+
     public function __construct(
         private readonly PricesImport $import,
         private readonly PriceCalculator $calculator,
@@ -153,12 +160,16 @@ class PriceImportService
                     continue;
                 }
 
-                $plantProduct = PlantProduct::firstOrCreate(
-                    ['plant_id' => $plant->id, 'product_id' => $product->id],
-                    ['is_active' => true],
-                );
+                // El margen vive en la relación, pero el archivo es la fuente
+                // de verdad (columna R): se aplica aunque no haya cambiado
+                // ningún precio, y el recálculo + snapshot se disparan igual
+                // porque el margen también cambia el precio final.
+                $fileMargin = $first->margin !== null ? (string) $first->margin : null;
+                $marginBefore = $this->existingMargin($plant->id, $product->id);
 
-                $hasWrites = false;
+                $plantProduct = $this->findOrRestoreRelation($plant->id, $product->id, $fileMargin);
+
+                $hasWrites = $fileMargin !== null && $marginBefore !== $fileMargin;
 
                 foreach ($groupItems as $item) {
                     if ($item->status === 'error') {
@@ -210,6 +221,75 @@ class PriceImportService
                 'errors' => (int) $batch->error_rows,
             ];
         });
+    }
+
+    /**
+     * Margen actual de la relación (incluso dada de baja), o null si la relación
+     * no existe todavía. Sirve para detectar que el archivo cambia el margen y así
+     * disparar el recálculo aunque no haya cambiado ningún precio.
+     */
+    private function existingMargin(int $plantId, int $productId): ?string
+    {
+        $existing = PlantProduct::withDeleted()
+            ->where('plant_id', $plantId)
+            ->where('product_id', $productId)
+            ->first(['margin']);
+
+        return $existing === null || $existing->margin === null
+            ? null
+            : (string) $existing->margin;
+    }
+
+    /**
+     * Resuelve la relación planta+producto para un lote, creándola o
+     * reviviéndola si existía dada de baja lógicamente.
+     *
+     * El índice único `uq_plant_products_tenant_plant_product` no incluye
+     * `is_deleted`, así que un `firstOrCreate` normal intentaría insertar una
+     * segunda fila y fallaría con duplicate key. Se busca con `withDeleted()`
+     * y se revive (`is_deleted = 0`, `is_active = 1`) conservando sus precios.
+     *
+     * El margen de la columna R se aplica también al revivir: a diferencia de
+     * la matriz (donde el margen solo se cambia si viene informado), aquí el
+     * archivo es la fuente de verdad de la relación.
+     */
+    private function findOrRestoreRelation(int $plantId, int $productId, ?string $margin = null): PlantProduct
+    {
+        $existing = PlantProduct::withDeleted()
+            ->where('plant_id', $plantId)
+            ->where('product_id', $productId)
+            ->first();
+
+        if ($existing === null) {
+            $attributes = [
+                'plant_id' => $plantId,
+                'product_id' => $productId,
+                'is_active' => true,
+            ];
+
+            if ($margin !== null) {
+                $attributes['margin'] = $margin;
+            }
+
+            return PlantProduct::create($attributes);
+        }
+
+        $changes = [];
+
+        if (! $existing->is_active || $existing->is_deleted) {
+            $changes['is_active'] = true;
+            $changes['is_deleted'] = false;
+        }
+
+        if ($margin !== null && (string) $existing->margin !== $margin) {
+            $changes['margin'] = $margin;
+        }
+
+        if ($changes !== []) {
+            $existing->update($changes);
+        }
+
+        return $existing;
     }
 
     public function cancel(PriceImportBatch $batch): void
@@ -273,7 +353,7 @@ class PriceImportService
         $products = $this->catalogMap(Product::query()->get()->map(fn (Product $p) => ['id' => $p->id, 'name' => $p->name]));
         $wholesalerIds = $this->catalogMap(Wholesaler::query()->get()->map(fn (Wholesaler $w) => ['id' => $w->id, 'name' => $w->name]));
 
-        $plantProducts = PlantProduct::query()->get()
+        $plantProducts = PlantProduct::withDeleted()->get()
             ->keyBy(fn (PlantProduct $pp) => $pp->plant_id.':'.$pp->product_id);
 
         $wholesalerPrices = WholesalerPrice::query()->get()
@@ -388,6 +468,31 @@ class PriceImportService
                 continue;
             }
 
+            // Columna R: margen S/ de esta planta+producto. Es un dato de la
+            // RELACIÓN, no de la fila del mayorista, así que se lee una vez por
+            // fila y se aplica a todos sus items.
+            //
+            // Solo se toma en cuenta si la fila trae algún precio válido: en el
+            // archivo real las combinaciones planta+producto sin precios tienen
+            // R = 0 (y V = 0) por relleno, y aplicar eso pondría margen 0 en
+            // relaciones que el archivo no toca. Con precios presentes, un 0 en
+            // R sí significa "sin margen" (S = Q) y se respeta.
+            $parsedMargin = $this->excelMargin($row);
+            $usablePrices = array_values(array_filter(
+                $prices,
+                fn (array $price) => $price['error'] === null && $price['new_price'] !== null,
+            ));
+
+            if ($parsedMargin['error'] !== null && $usablePrices !== []) {
+                $groups[] = $this->rowGroup($sheetRow, $plant, $product, [
+                    $this->priceRecord('-', null, $parsedMargin['error'], $plantId, $productId, $plantProductId, null),
+                ], $this->excelFinal($row), null);
+
+                continue;
+            }
+
+            $excelMargin = $usablePrices === [] ? null : $parsedMargin['margin'];
+
             // Solo se registran como catálogos nuevos pendientes los que la
             // fila realmente va a tocar (tiene precios); las plantas/productos
             // sin precios en el archivo no generan items y no deben ofrecerse
@@ -399,7 +504,7 @@ class PriceImportService
                 $missing['products'][$product] = true;
             }
 
-            $groups[] = $this->rowGroup($sheetRow, $plant, $product, $prices, $this->excelFinal($row));
+            $groups[] = $this->rowGroup($sheetRow, $plant, $product, $prices, $this->excelFinal($row), $excelMargin);
         }
 
         if ($groups === []) {
@@ -506,14 +611,21 @@ class PriceImportService
         ];
     }
 
-    private function rowGroup(int $row, string $plant, string $product, array $prices, ?string $excelFinal = null): array
-    {
+    private function rowGroup(
+        int $row,
+        string $plant,
+        string $product,
+        array $prices,
+        ?string $excelFinal = null,
+        ?string $excelMargin = null,
+    ): array {
         return [
             'row' => $row,
             'plant' => $plant,
             'product' => $product,
             'prices' => $prices,
             'excel_final' => $excelFinal,
+            'excel_margin' => $excelMargin,
         ];
     }
 
@@ -526,6 +638,30 @@ class PriceImportService
         }
 
         return Decimal::round($raw, 4);
+    }
+
+    /**
+     * Margen S/ de la fila (columna R del Excel).
+     *
+     * @return array{ok: bool, margin: ?string, error: ?string}
+     */
+    private function excelMargin(array $row): array
+    {
+        $raw = trim((string) ($row[self::EXCEL_MARGIN_COLUMN] ?? ''));
+
+        if ($raw === '') {
+            return ['ok' => true, 'margin' => null, 'error' => null];
+        }
+
+        if (! is_numeric($raw)) {
+            return ['ok' => false, 'margin' => null, 'error' => 'invalid_margin'];
+        }
+
+        if ((float) $raw < 0) {
+            return ['ok' => false, 'margin' => null, 'error' => 'invalid_margin'];
+        }
+
+        return ['ok' => true, 'margin' => Decimal::round($raw, 4), 'error' => null];
     }
 
     private function persistItems(PriceImportBatch $batch, array $parsed): void
@@ -546,6 +682,7 @@ class PriceImportService
                     'wholesaler_name' => $price['wholesaler'] ?: '-',
                     'previous_price' => $price['previous_price'],
                     'new_price' => $price['new_price'],
+                    'margin' => $group['excel_margin'] ?? null,
                     'status' => $status,
                     'error_message' => $price['error'],
                 ]);
@@ -586,6 +723,13 @@ class PriceImportService
      * Compara la columna V del Excel (precio final) con el motor del sistema
      * usando los precios del archivo (los mayoristas nuevos participan con un
      * id sintético determinístico para mantener el desempate del §16).
+     *
+     * El motor se ejecuta con el **margen de la propia fila** (columna R), que
+     * es el mismo con el que el Excel calculó su columna V. Por eso la
+     * comparación sigue siendo significativa aunque cada relación tenga un
+     * margen distinto: si difiere, es porque los datos no coinciden, no porque
+     * los márgenes sean diferentes. Cuando la fila no trae margen se usa el de
+     * la relación si existe, y si no el margen por defecto de la configuración.
      */
     private function calcPreview(array $parsed): array
     {
@@ -598,6 +742,9 @@ class PriceImportService
         $sortedNewWholesalers = $parsed['missing_catalogs']['wholesalers'];
         asort($sortedNewWholesalers);
         $newIndex = array_flip(array_keys($sortedNewWholesalers));
+
+        $currentMargins = $this->currentMarginsByRelation();
+        $defaultMargin = (string) $config->margin;
 
         $rows = [];
         $mismatches = 0;
@@ -619,7 +766,11 @@ class PriceImportService
                     return ['wholesaler_id' => $wholesalerId, 'price' => $price['new_price']];
                 });
 
-            $result = $this->calculator->resolve($priceRows->values(), $config);
+            $margin = $group['excel_margin']
+                ?? $currentMargins[$this->relationKey($group['plant'], $group['product'])]
+                ?? $defaultMargin;
+
+            $result = $this->calculator->resolve($priceRows->values(), $config, $margin);
 
             if ($result === null) {
                 continue;
@@ -636,6 +787,7 @@ class PriceImportService
                 'row_number' => $group['row'],
                 'plant' => $group['plant'],
                 'product' => $group['product'],
+                'margin' => $margin,
                 'excel_final' => $excelFinal,
                 'system_final' => $result->finalPrice,
                 'match' => $match,
@@ -643,6 +795,35 @@ class PriceImportService
         }
 
         return ['active' => true, 'rows' => $rows, 'mismatches' => $mismatches];
+    }
+
+    /**
+     * Clave planta|producto en minúsculas, como `catalogMap()`.
+     */
+    private function relationKey(string $plant, string $product): string
+    {
+        return mb_strtolower($plant).'|'.mb_strtolower($product);
+    }
+
+    /**
+     * Margen actual de las relaciones existentes, por "planta|producto"
+     * (ambos en minúsculas), para las filas del archivo que no traen margen.
+     *
+     * @return array<string, string>
+     */
+    private function currentMarginsByRelation(): array
+    {
+        $plantNames = Plant::query()->get()->mapWithKeys(fn (Plant $p) => [(int) $p->id => mb_strtolower((string) $p->name)]);
+        $productNames = Product::query()->get()->mapWithKeys(fn (Product $p) => [(int) $p->id => mb_strtolower((string) $p->name)]);
+
+        return PlantProduct::withDeleted()
+            ->get(['plant_id', 'product_id', 'margin'])
+            ->filter(fn (PlantProduct $pp) => $pp->margin !== null
+                && isset($plantNames[$pp->plant_id], $productNames[$pp->product_id]))
+            ->mapWithKeys(fn (PlantProduct $pp) => [
+                $plantNames[$pp->plant_id].'|'.$productNames[$pp->product_id] => (string) $pp->margin,
+            ])
+            ->all();
     }
 
     /**

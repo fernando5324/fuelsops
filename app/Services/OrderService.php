@@ -8,6 +8,7 @@ use App\Models\Driver;
 use App\Models\MediaFile;
 use App\Models\Order;
 use App\Models\OrderDeletion;
+use App\Models\OrderDeposit;
 use App\Models\OrderDetail;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
@@ -281,66 +282,179 @@ class OrderService
      * Totalizadores según la regla provisional (ADR-001):
      * detail_total = gallons * sale_price; total_sale = SUM(gallons * sale_price).
      *
-     * A partir de ADR-010, si los detalles traen `purchase_price`, se calculan
-     * además total_purchase (SUM galones * precio de compra, precisión bcmath),
-     * gain (venta - compra) y margin (% sobre la venta). Si ninguna línea tiene
-     * precio de compra registrado, `total_purchase`/`gain`/`margin` son null
-     * (la UI muestra '-'): evita una "ganancia = venta completa" engañosa.
+     * A partir de ADR-010, si los detalles traen `purchase_price`, se calcula
+     * además total_purchase (SUM galones * precio de compra, precisión bcmath).
+     * Si ninguna línea tiene precio de compra registrado, `total_purchase` es
+     * null (la UI muestra '-'), para no mostrar una compra en cero.
+     *
+     * A partir de ADR-013, `gain` es la SUMA DE LOS MÁRGENES configurados por
+     * relación planta+producto (`plant_products.margin`, monto absoluto en S/
+     * por galón): gain = SUM(gallons * margin). Ya no es (total_sale -
+     * total_purchase): el margen es el markup que el motor aplica sobre el
+     * precio sin IGV (ADR-010 §35) y es un dato que el negocio conoce aunque
+     * falte el precio de compra de alguna línea. Si ningún detalle tiene
+     * margen, `gain` es null (la UI muestra '-'). Todos los montos se suman
+     * con bcmath (nunca float) y se redondean a 2 decimales.
      */
     public function totals(Order $order): array
     {
         $totalGallons = round($order->details->sum('gallons'), 2);
         $totalSale = round($order->details->sum(fn ($detail) => (float) $detail->gallons * (float) $detail->sale_price), 2);
 
-        $totalPurchase = null;
-        $purchases = $this->purchasePricesFor($order);
+        $pricing = $this->pricingFor($order);
+
+        $purchaseAcc = '0';
+        $gainAcc = '0';
         $hasPurchase = false;
-        $acc = '0';
+        $hasMargin = false;
+
         foreach ($order->details as $detail) {
-            $price = $detail->purchase_price ?? ($purchases[$this->purchaseKey($detail)] ?? null);
-            if ($price === null) {
-                continue;
+            $price = $detail->purchase_price ?? ($pricing['purchases'][$this->purchaseKey($detail)] ?? null);
+            if ($price !== null) {
+                $hasPurchase = true;
+                $purchaseAcc = bcadd($purchaseAcc, bcmul((string) $detail->gallons, (string) $price, 4), 2);
             }
-            $hasPurchase = true;
-            $acc = bcadd($acc, bcmul((string) $detail->gallons, (string) $price, 4), 2);
-        }
 
-        if ($hasPurchase) {
-            $totalPurchase = $acc;
-        }
-
-        $gain = null;
-        $margin = null;
-        if ($totalPurchase !== null) {
-            $gain = bcsub((string) $totalSale, $totalPurchase, 2);
-            if ((float) $totalSale > 0) {
-                $margin = bcmul(bcdiv($gain, (string) $totalSale, 6), '100', 2);
+            $margin = $detail->margin ?? ($pricing['margins'][$this->marginKey($detail)] ?? null);
+            if ($margin !== null) {
+                $hasMargin = true;
+                $gainAcc = bcadd($gainAcc, $this->marginLineAmount($detail->gallons, $margin), 2);
             }
         }
 
         return [
             'total_gallons' => $totalGallons,
             'total_sale' => $totalSale,
-            'total_purchase' => $totalPurchase,
-            'gain' => $gain,
-            'margin' => $margin,
+            'total_purchase' => $hasPurchase ? $purchaseAcc : null,
+            'gain' => $hasMargin ? $gainAcc : null,
             'details' => $order->details->count(),
         ];
     }
 
     /**
-     * Adjunta el precio de compra a cada detalle del pedido como atributo
-     * (sin persistir): la celda de `wholesaler_prices` de la relación
-     * (planta+producto, mayorista), o null si no existe (celda vacía == sin
-     * precio). Se ignora `is_active` de `plant_products` (dato de referencia).
+     * Cuenta por pagar a los mayoristas del pedido: agrupa las líneas por su
+     * propio `order_details.wholesaler_id` y suma galones × precio de compra de
+     * la celda de ESE mayorista (ADR-010), que es lo que Sertoco le debe a cada
+     * uno por este pedido.
+     *
+     * El `total` se acumula con la misma operación y sobre las mismas líneas en
+     * el mismo orden que `total_purchase` en `totals()`, así que el cuadro
+     * "Depósito por proveedor" cuadra exactamente con el cuadro "Compra" (los
+     * dos usan `bcmul(gallons, precio, 4)` + `bcadd(..., 2)`, nunca float).
+     *
+     * Las líneas sin precio (celda vacía o 0 explícito) no aportan y NO se
+     * inventan: se devuelven en `lines_without_price` para que la UI lo diga en
+     * lugar de mostrar un total incompleto en silencio. Es la misma regla de
+     * `total_purchase`: si ninguna línea tiene precio, `total` es `null`.
+     *
+     * DATO DERIVADO: no se persiste nada ni hay tabla propia; se recalcula desde
+     * los detalles y la matriz de precios. Por eso es de solo lectura en la UI
+     * (tampoco en la papelera) y no genera escrituras, rutas ni permisos.
+     *
+     * @return array{items: array<int, array{wholesaler_id: int, wholesaler_name: ?string, gallons: string, amount: string, lines: int}>, total: ?string, lines_without_price: int}
      */
-    public function attachPurchasePrices(Order $order): void
+    public function supplierPayables(Order $order): array
     {
-        $purchases = $this->purchasePricesFor($order);
+        $pricing = $this->pricingFor($order);
+
+        $groups = [];
+        $total = '0';
+        $hasPurchase = false;
+        $withoutPrice = 0;
 
         foreach ($order->details as $detail) {
-            $detail->setAttribute('purchase_price', $purchases[$this->purchaseKey($detail)] ?? null);
+            $price = $detail->purchase_price ?? ($pricing['purchases'][$this->purchaseKey($detail)] ?? null);
+
+            if ($price === null) {
+                $withoutPrice++;
+
+                continue;
+            }
+
+            $hasPurchase = true;
+            $lineAmount = bcmul((string) $detail->gallons, (string) $price, 4);
+            $total = bcadd($total, $lineAmount, 2);
+
+            $wholesalerId = (int) $detail->wholesaler_id;
+
+            if (! isset($groups[$wholesalerId])) {
+                $groups[$wholesalerId] = [
+                    'wholesaler_id' => $wholesalerId,
+                    'wholesaler_name' => $detail->wholesaler?->name,
+                    'gallons' => '0',
+                    'amount' => '0',
+                    'lines' => 0,
+                ];
+            }
+
+            $groups[$wholesalerId]['gallons'] = bcadd($groups[$wholesalerId]['gallons'], (string) $detail->gallons, 2);
+            $groups[$wholesalerId]['amount'] = bcadd($groups[$wholesalerId]['amount'], $lineAmount, 2);
+            $groups[$wholesalerId]['lines']++;
         }
+
+        $items = array_values($groups);
+
+        // Mayor monto primero; desempate por id asc (criterio determinista, el
+        // mismo que usa el motor de precios cuando dos mayoristas empatan).
+        usort($items, function (array $a, array $b) {
+            $byAmount = bccomp((string) $b['amount'], (string) $a['amount']);
+
+            return $byAmount !== 0 ? $byAmount : $a['wholesaler_id'] <=> $b['wholesaler_id'];
+        });
+
+        return [
+            'items' => $items,
+            'total' => $hasPurchase ? $total : null,
+            'lines_without_price' => $withoutPrice,
+        ];
+    }
+
+    /**
+     * Adjunta a cada detalle, como atributos no persistidos, los datos de
+     * referencia del módulo de precios (ADR-010) que muestran las columnas del
+     * detalle del pedido:
+     *  - `purchase_price`: precio de compra de la celda (planta+producto,
+     *    mayorista) de `wholesaler_prices`, o null si no hay precio (celda vacía
+     *    == sin precio).
+     *  - `margin`: margen absoluto en S/ por galón de la relación
+     *    `plant_products.margin` (columna R del Excel), o null si la relación
+     *    no existe.
+     *  - `margin_amount`: la multiplicación margen × galones del detalle
+     *    (bcmath), que es la línea que suma el pie de la tabla y alimenta el
+     *    total de `gain` del resumen financiero.
+     * Se ignoran `is_active` e `is_deleted` de `plant_products` (dato de
+     * referencia: la relación dada de baja conserva sus precios y su margen).
+     */
+    public function attachPricing(Order $order): void
+    {
+        $pricing = $this->pricingFor($order);
+
+        foreach ($order->details as $detail) {
+            $margin = $pricing['margins'][$this->marginKey($detail)] ?? null;
+
+            $detail->setAttribute('purchase_price', $pricing['purchases'][$this->purchaseKey($detail)] ?? null);
+            $detail->setAttribute('margin', $margin);
+            $detail->setAttribute('margin_amount', $margin === null ? null : $this->marginLineAmount($detail->gallons, $margin));
+        }
+    }
+
+    /**
+     * Registra un depósito del cliente a partir de un voucher adjunto
+     * (ADR-013). El alta es MANUAL: el sistema guarda lo que el usuario leyó del
+     * voucher (banco, N° de operación, fecha y monto) sin interpretar el
+     * archivo adjunto.
+     */
+    public function storeDeposit(Order $order, array $data): OrderDeposit
+    {
+        return OrderDeposit::create([
+            'tenant_id' => $order->tenant_id,
+            'order_id' => $order->id,
+            'deposit_date' => $data['deposit_date'],
+            'bank' => trim((string) $data['bank']),
+            'operation_number' => trim((string) $data['operation_number']),
+            'amount' => $data['amount'],
+            'created_by' => $this->actorId(),
+        ]);
     }
 
     private function purchaseKey(OrderDetail $detail): string
@@ -348,38 +462,56 @@ class OrderService
         return "{$detail->plant_id}-{$detail->wholesaler_id}-{$detail->product_id}";
     }
 
+    /** Clave del margen: el margen es de la RELACIÓN (planta + producto). */
+    private function marginKey(OrderDetail $detail): string
+    {
+        return "{$detail->plant_id}-{$detail->product_id}";
+    }
+
     /**
-     * Mapa (planta, mayorista, producto) => precio de compra más bajo (MIN)
-     * para los detalles del pedido. Query en dos pasos:
-     *  1. plant_products resuelve (tenant, planta, producto) -> plant_product_id.
+     * Multiplicación de una línea: margen (monto absoluto en S/ por galón) ×
+     * galones del detalle. Se calcula con bcmath a 4 decimales y se suma con
+     * `bcadd` a escala 2 (los importes se registran en soles con 2 decimales),
+     * nunca con float.
+     */
+    private function marginLineAmount(mixed $gallons, mixed $margin): string
+    {
+        return bcmul((string) $gallons, (string) $margin, 4);
+    }
+
+    /**
+     * Datos de referencia de precios de los detalles del pedido, en dos pasos:
+     *  1. plant_products resuelve (tenant, planta, producto) -> plant_product_id
+     *     y trae su `margin` (con withDeleted: una relación dada de baja sigue
+     *     dando su margen al pedido, igual que sus precios).
      *  2. wholesaler_prices MIN(price) por (plant_product_id, wholesaler_id),
      *     solo precios válidos (> 0, misma regla del motor ADR-010); una celda
      *     vacía (NULL) o 0 explícito == sin precio disponible.
+     *
+     * @return array{purchases: array<string,string>, margins: array<string,string>}
      */
-    private function purchasePricesFor(Order $order): array
+    private function pricingFor(Order $order): array
     {
+        $empty = ['purchases' => [], 'margins' => []];
+
         if ($order->details->isEmpty()) {
-            return [];
+            return $empty;
         }
 
-        $plantProducts = PlantProduct::query()
+        $plantProducts = PlantProduct::withDeleted()
             ->whereIn('plant_id', $order->details->pluck('plant_id')->unique())
             ->whereIn('product_id', $order->details->pluck('product_id')->unique())
             ->get()
-            ->mapWithKeys(fn (PlantProduct $pp) => [
-                "{$pp->plant_id}-{$pp->product_id}" => $pp->id,
-            ]);
+            ->keyBy(fn (PlantProduct $pp) => "{$pp->plant_id}-{$pp->product_id}");
 
         if ($plantProducts->isEmpty()) {
-            return [];
+            return $empty;
         }
-
-        $plantProductIds = $plantProducts->values()->all();
 
         $prices = WholesalerPrice::query()
             ->whereIn('wholesaler_id', $order->details->pluck('wholesaler_id')->unique())
             ->where('price', '>', '0')
-            ->whereIn('plant_product_id', $plantProductIds)
+            ->whereIn('plant_product_id', $plantProducts->pluck('id')->all())
             ->select('plant_product_id', 'wholesaler_id', DB::raw('MIN(price) AS price'))
             ->groupBy('plant_product_id', 'wholesaler_id')
             ->get()
@@ -389,16 +521,25 @@ class OrderService
                 ]
             );
 
-        $result = [];
+        $purchases = [];
+        $margins = [];
+
         foreach ($order->details as $detail) {
-            $key = $this->purchaseKey($detail);
-            $ppKey = "{$detail->plant_id}-{$detail->product_id}";
-            if (isset($plantProducts[$ppKey], $prices[$this->cellKey($plantProducts[$ppKey], $detail->wholesaler_id)])) {
-                $result[$key] = $prices[$this->cellKey($plantProducts[$ppKey], $detail->wholesaler_id)];
+            $plantProduct = $plantProducts->get($this->marginKey($detail));
+
+            if ($plantProduct === null) {
+                continue;
             }
+
+            $cell = $this->cellKey($plantProduct->id, $detail->wholesaler_id);
+            if (isset($prices[$cell])) {
+                $purchases[$this->purchaseKey($detail)] = $prices[$cell];
+            }
+
+            $margins[$this->marginKey($detail)] = (string) $plantProduct->margin;
         }
 
-        return $result;
+        return ['purchases' => $purchases, 'margins' => $margins];
     }
 
     private function cellKey(int $plantProductId, int $wholesalerId): string
@@ -427,7 +568,9 @@ class OrderService
      *  5. orders.is_deleted = 1.
      *  6. Marca los media afectados como is_deleted = 1 SIN borrar el archivo
      *     físico (§10; no usa MediaService::destroy a propósito).
-     * Los pagos no se tocan (no existe tabla de pagos aún; placeholder).
+     * Los depósitos del cliente (ADR-013) NO se tocan: son información
+     * financiera del pedido y sobreviven a la papelera (§9/§12/§21); solo se
+     * copian al snapshot como dato histórico.
      *
      * @throws ValidationException si el pedido ya está eliminado o el motivo falta.
      */
@@ -545,7 +688,8 @@ class OrderService
     /**
      * Fotografía histórica del pedido al momento de su eliminación
      * (ADR-011 §5). Es EXCLUSIVAMENTE informativo: la restauración no se
-     * apoya en él, usa los registros reales (orders/order_details/media_files).
+     * apoya en él, usa los registros reales (orders/order_details/
+     * media_files/order_deposits).
      */
     public function buildSnapshot(Order $order): array
     {
@@ -555,6 +699,7 @@ class OrderService
             'details.plant',
             'details.wholesaler',
             'details.product',
+            'deposits',
         ]);
 
         $details = $order->details->map(fn (OrderDetail $detail) => [
@@ -567,6 +712,17 @@ class OrderService
         ])->all();
 
         $firstPlant = $order->details->first()?->plant;
+
+        // Depósitos del cliente registrados a mano desde los vouchers (ADR-013):
+        // la información financiera del pedido que la papelera debe conservar
+        // (ADR-011 §9/§12/§16/§21 ya no son N/A).
+        $deposits = $order->deposits->map(fn (OrderDeposit $deposit) => [
+            'id' => $deposit->id,
+            'deposit_date' => $deposit->deposit_date?->format('Y-m-d'),
+            'bank' => $deposit->bank,
+            'operation_number' => $deposit->operation_number,
+            'amount' => (string) $deposit->amount,
+        ])->all();
 
         return [
             'order' => [
@@ -584,7 +740,7 @@ class OrderService
                 'name' => $firstPlant->name,
             ] : null,
             'details' => $details,
-            'payments' => [],
+            'deposits' => $deposits,
         ];
     }
 

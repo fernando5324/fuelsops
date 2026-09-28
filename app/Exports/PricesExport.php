@@ -9,10 +9,10 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
  * Exportación de la matriz de precios (ADR-010, Fase 8+).
  *
  * Replica en .xlsx lo que muestra la pantalla `/precios` para los filtros
- * activos: una columna por mayorista más el resultado del motor (mejor
- * precio, ganador y precio final). Los montos se escriben como strings
- * decimales de 4 dígitos (nunca float) y la celda vacía representa "sin
- * precio" (NULL), igual que en la BD.
+ * activos: el margen de la relación, una columna por mayorista más el
+ * resultado del motor (mejor precio, ganador y precio final). Los montos se
+ * escriben como strings decimales de 4 dígitos (nunca float) y la celda vacía
+ * representa "sin precio" (NULL), igual que en la BD.
  */
 class PricesExport implements FromArray, WithHeadings
 {
@@ -28,6 +28,7 @@ class PricesExport implements FromArray, WithHeadings
             __('pricing.col_plant'),
             __('pricing.col_product'),
             __('common.status'),
+            __('pricing.col_margin'),
         ];
 
         foreach ($this->wholesalers as $wholesaler) {
@@ -56,6 +57,7 @@ class PricesExport implements FromArray, WithHeadings
             $row['plant_name'],
             $row['product_name'],
             $row['is_active'] ? __('common.active') : __('common.inactive'),
+            $row['margin'] ?? '',
         ];
 
         foreach ($this->wholesalers as $wholesaler) {

@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * Permite auditar cada registro procesado (new | updated | unchanged | error)
  * conservando nombres y precios para mostrar resúmenes/preview sin modificar
- * todavía las tablas definitivas.
+ * todavía las tablas definitivas. `margin` replica el margen S/ de la columna R
+ * del Excel para todas las filas de items de la misma planta+producto, de modo
+ * que confirm() pueda aplicarlo a la relación sin releer el archivo.
  */
 class PriceImportItem extends Model
 {
@@ -27,6 +29,7 @@ class PriceImportItem extends Model
         'wholesaler_name',
         'previous_price',
         'new_price',
+        'margin',
         'status',
         'error_message',
     ];
@@ -35,6 +38,7 @@ class PriceImportItem extends Model
         'row_number' => 'integer',
         'previous_price' => 'decimal:4',
         'new_price' => 'decimal:4',
+        'margin' => 'decimal:4',
     ];
 
     public function batch(): BelongsTo

@@ -23,6 +23,7 @@ order_status_history
 orders
 order_details
 order_files
+order_deposits          ADR-013
 ```
 
 ## Relationships
@@ -62,6 +63,12 @@ orders
   │ 1:N
   ▼
 order_files
+
+orders
+  │
+  │ 1:N   (ADR-013: un depósito por voucher del cliente)
+  ▼
+order_deposits
 ```
 
 ## Organizations (multi-tenant)
@@ -160,6 +167,18 @@ An order stores:
 -   Tractor
 -   Notes
 
+An order also **has** (never stores inline): details, deposits, files, status
+history and deletion history.
+
+``` text
+orders (1)
+    ├── order_details (N)
+    ├── order_deposits (N)     ADR-013
+    ├── media_files (N)        polimórfica
+    ├── order_status_history (N)
+    └── order_deletions (N)    ADR-011 (histórico de papelera)
+```
+
 ## Order details
 
 Each order can contain multiple details.
@@ -198,6 +217,68 @@ definitive rule.
 Totals are calculated from order details instead of being stored as
 independent order fields.
 
+Two order-level totals were added with the pricing module and fixed by
+ADR-013:
+
+``` text
+total_purchase = SUM(gallons × precio de compra de la celda ganadora)
+                 null si NINGUNA línea tiene precio (celda vacía o 0)
+
+margin(detalle)        = plant_products.margin de (plant_id, product_id)
+                         null si la relación planta+producto no existe
+margin_amount(detalle) = gallons × margin(detalle)
+gain(pedido)           = SUM(margin_amount de sus detalles)
+                         null si NINGÚN detalle tiene margen
+```
+
+`gain` is no longer `total_sale - total_purchase` (ADR-013 §3), and the
+percentage margin box was removed from the order summary. Both sums are
+accumulated with bcmath at scale 2 (`bcadd(..., 2)` on the unrounded
+`bcmul(gallons, valor)` product), never with float. `Decimal::round` (half away
+from zero) belongs to the pricing engine results (ADR-010), not to these two
+order-level sums.
+
+## Order deposits (ADR-013)
+
+`order_deposits` stores the deposits a client pays against an order, one
+row per voucher, transcribed manually from the attached document:
+
+``` text
+order_deposits (N)
+    tenant_id  → tenants (1)
+    order_id   → orders (1)        ON DELETE RESTRICT
+    created_by → users (1)
+
+deposit_date    DATE          fecha del voucher (sin hora)
+bank            VARCHAR(100)  banco de la operación
+operation_number VARCHAR(50)   N° de operación del voucher
+amount          DECIMAL(12,4) CHECK (amount > 0)
+is_deleted      TINYINT(1)    baja lógica (LogicalDelete)
+```
+
+Notes:
+
+- The deposit total is computed on screen (`SUM(amount)` of active rows) and is
+  **not** stored, so a logically deleted deposit can never leave a wrong total
+  persisted on the order.
+- The **supplier payable** ("Depósito por proveedor" in the order detail) is
+  **derived and not stored either**: `OrderService::supplierPayables()` groups
+  the order details by their own `wholesaler_id` and sums
+  `gallons × purchase price of that wholesaler's cell`, so its total is exactly
+  `total_purchase`. There is no `order_supplier_deposits` table, no vouchers and
+  no CRUD for it — it is read-only, also in the trash (ADR-013 §14).
+- Deposits survive the order trash: the order's `is_deleted` does not touch
+  `order_deposits`, and the trash detail lists them read-only. The
+  `order_deletions.snapshot` carries a `deposits` block (replacing the old
+  `payments: []` placeholder).
+- There is no uniqueness on `(order_id, operation_number)`: two vouchers of the
+  same bank can share an operation number.
+- Only **add** and **logical delete** exist (no edit, no restore from UI): the
+  cash history is never rewritten.
+- Registering **actual payments** made to a supplier (vouchers, like the client
+  deposits) remains unimplemented; the business confirmed it only needs the
+  amount owed per wholesaler, which is derived.
+
 ## Pricing (ADR-010)
 
 The pricing module separates source data, configuration, imports, and
@@ -210,7 +291,19 @@ New tables:
 
 -   `plant_products`: which products are available on each plant
     (unique per tenant/plant/product, `is_active`). Not all products
-    exist on all plants.
+    exist on all plants. It also has a logical deletion flag
+    (`is_deleted`) so a plant+product can be removed from the matrix
+    without losing its prices (`wholesaler_prices`) or its calculation
+    history (`price_calculations`); both reference it with `ON DELETE
+    RESTRICT`, so the row is never deleted physically. The unique key
+    does not include `is_deleted`, which is why re-creating the same
+    plant+product revives the existing row instead of inserting a new
+    one. It owns **`margin DECIMAL(12,4) NOT NULL DEFAULT 0.1300`**, the
+    absolute amount in S/ that the pricing engine adds to the
+    purchase price for this combination (`S = Q + margin`); it is
+    imported from column R (`MARGEN SERTOCO`) of the Excel file, which
+    is its source of truth, and is editable per row in the admin
+    matrix.
 -   `wholesaler_prices`: price offered by each wholesaler for a
     plant+product (unique per tenant/plant_product/wholesaler).
     `price DECIMAL(12,4)` is NULL when the wholesaler has no price for
@@ -220,11 +313,17 @@ New tables:
     imports. The batch holds the summary (file, status, total/new/
     updated/unchanged/error rows); each item keeps the per-row result
     (`new`, `updated`, `unchanged`, `error`) with previous/new price and
-    error message, enabling preview before confirming an import.
+    error message, enabling preview before confirming an import. Items
+    also keep the **`margin DECIMAL(12,4) NULL`** read from column R of
+    their row (NULL when the row had no prices, i.e. no meaningful
+    margin; historical rows stay NULL).
 -   `pricing_configurations`: calculation parameters stored as decimals
     (`margin`, `igv_rate`, `perception_rate`), active flag and
     `effective_from`/`effective_until` for future versioning. Default
-    values: margin 0.13, IGV 0.18, perception 0.01.
+    values: margin 0.13, IGV 0.18, perception 0.01. **Only IGV and
+    perception are global**: `margin` is now just the default value
+    proposed for new `plant_products` rows, since the margin that the
+    engine uses lives in each relation.
 -   `price_calculations`: append-only history of every confirmed
     calculation. Stores `calculation_data` as an immutable JSON snapshot
     with the exact values used at that moment (best wholesaler price,

@@ -39,12 +39,13 @@ class PriceApiController extends Controller
             'prices' => ['required', 'array'],
             'prices.*.wholesaler_id' => ['required', 'integer'],
             'prices.*.price' => ['nullable', 'string', 'max:20'],
+            'margin' => ['nullable', 'string', 'max:20', 'regex:/^\d{1,10}(\.\d{1,4})?$/'],
         ]);
 
         $plantProduct = PlantProduct::findOrFail((int) $data['plant_product_id']);
 
         try {
-            $result = $pricing->preview($plantProduct, $data['prices']);
+            $result = $pricing->preview($plantProduct, $data['prices'], $data['margin'] ?? null);
         } catch (RuntimeException) {
             return response()->json([
                 'ok' => false,
@@ -83,6 +84,7 @@ class PriceApiController extends Controller
             'prices' => ['required', 'array', 'max:50'],
             'prices.*.wholesaler_id' => ['required', 'integer'],
             'prices.*.price' => ['nullable', 'string', 'max:20'],
+            'margin' => ['nullable', 'string', 'max:20', 'regex:/^\d{1,10}(\.\d{1,4})?$/'],
         ]);
 
         $plantProduct = PlantProduct::findOrFail((int) $data['plant_product_id']);
@@ -92,7 +94,7 @@ class PriceApiController extends Controller
         }
 
         try {
-            $pricing->savePrices($plantProduct, $data['prices']);
+            $pricing->savePrices($plantProduct, $data['prices'], $data['margin'] ?? null);
         } catch (RuntimeException) {
             return back()->with('flash', ['error' => __('pricing.no_active_configuration')]);
         }
@@ -148,11 +150,16 @@ class PriceApiController extends Controller
         $data = $request->validate([
             'plant_id' => ['required', 'integer'],
             'product_id' => ['required', 'integer'],
+            'margin' => ['nullable', 'string', 'max:20', 'regex:/^\d{1,10}(\.\d{1,4})?$/'],
         ]);
 
         if ($this->catalogExists(Plant::class, (int) $data['plant_id'])
             && $this->catalogExists(Product::class, (int) $data['product_id'])) {
-            $pricing->createRelation((int) $data['plant_id'], (int) $data['product_id']);
+            $pricing->createRelation(
+                (int) $data['plant_id'],
+                (int) $data['product_id'],
+                $data['margin'] ?? null,
+            );
 
             return $this->flashOk('pricing.relation_created');
         }
@@ -193,6 +200,23 @@ class PriceApiController extends Controller
         $pricing->toggleRelation($plantProduct, (bool) $data['is_active']);
 
         return $this->flashOk($data['is_active'] ? 'pricing.activated_ok' : 'pricing.deactivated_ok');
+    }
+
+    /**
+     * Da de baja la relación planta+producto (baja lógica, `is_deleted`).
+     *
+     * Solo el dueño (is_owner), igual que enviar un pedido a la papelera
+     * (ADR-011). El binding de {plant_product} usa los global scopes: una
+     * relación ya dada de baja o de otra organización devuelve 404.
+     * Los precios y el historial NO se borran (ADR-010 §27/§28).
+     */
+    public function destroyRelation(PlantProduct $plantProduct, PricingAdminService $pricing): RedirectResponse
+    {
+        abort_unless((bool) auth()->user()?->is_owner, 403);
+
+        $pricing->deleteRelation($plantProduct);
+
+        return $this->flashOk('pricing.relation_deleted');
     }
 
     private function wholesalersExist(array $ids): bool

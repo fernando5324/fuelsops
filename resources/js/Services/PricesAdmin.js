@@ -17,6 +17,7 @@ export const PricesAdmin = {
         pricesDestroy: (id) => `${base}/prices/${id}`,
         relationsStore: `${base}/relations`,
         relationsUpdate: (id) => `${base}/relations/${id}`,
+        relationsDestroy: (id) => `${base}/relations/${id}`,
         relationsHistory: (id) => `${base}/relations/${id}/history`,
     },
     preview: (data) => http.post(`${base}/prices/preview`, data),

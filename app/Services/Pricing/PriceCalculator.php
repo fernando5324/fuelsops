@@ -21,11 +21,18 @@ use function bcmul;
  *             determinístico por wholesaler_id ASC).
  *   Paso 4:   P = ROUND(N, 4)                       -> rounded_price
  *   Paso 5:   Q = P / (1 + igv_rate)                -> purchase_price
- *   Paso 6:   R = margin (pricing_configurations)   -> margin
+ *   Paso 6:   R = margin (de la RELACIÓN)           -> margin
  *   Paso 7:   S = Q + margin                        -> sale_price
  *   Paso 8:   T = S * (1 + igv_rate)                -> sale_price_with_igv
  *   Paso 9:   U = T * (1 + perception_rate)         -> sale_price_with_perception
  *   Paso 10:  V = U                                 -> final_price
+ *
+ * El margen es un dato de la relación planta+producto
+ * (`plant_products.margin`, que viene de la columna R del Excel), NO de la
+ * configuración global: cada relación puede tener el suyo. La configuración
+ * solo aporta el margen por defecto cuando la relación no tiene uno (importe
+ * una fila que aún no existe) y sigue siendo la fuente de igv_rate y
+ * perception_rate.
  *
  * Solo se consideran precios válidos (NOT NULL y > 0); una celda vacía de un
  * mayorista representa "sin precio disponible" y jamás debe tomar el valor 0
@@ -64,6 +71,9 @@ class PriceCalculator
     /**
      * Ejecuta los 10 pasos del motor con una configuración explícita.
      *
+     * El margen es el de la relación (`plant_products.margin`); si viniera null
+     * se usaría el de la configuración como valor por defecto.
+     *
      * Devuelve null cuando el plant_product no tiene ningún precio válido
      * (ningún mayorista con precio > 0).
      */
@@ -75,7 +85,7 @@ class PriceCalculator
             ->get()
             ->map(fn (WholesalerPrice $price) => $this->winnerRow($price));
 
-        return $this->resolve($prices, $config);
+        return $this->resolve($prices, $config, $this->marginOf($plantProduct, $config));
     }
 
     /**
@@ -87,8 +97,10 @@ class PriceCalculator
      * fuente de verdad para la cadena de cálculo (ADR-010 §16-§17).
      *
      * @param  Collection<int, array{wholesaler_id: int, price: string}>  $priceRows
+     * @param  string|null  $margin  Margen S/ a aplicar (el de la relación); si
+     *                               es null se usa el de la configuración.
      */
-    public function resolve(Collection $priceRows, PricingConfiguration $config): ?PricingResult
+    public function resolve(Collection $priceRows, PricingConfiguration $config, ?string $margin = null): ?PricingResult
     {
         if ($priceRows->isEmpty()) {
             return null;
@@ -107,7 +119,20 @@ class PriceCalculator
             $winner['wholesaler_price_id'] ?? null,
             $winner['price'],
             $config,
+            $margin ?? (string) $config->margin,
         );
+    }
+
+    /**
+     * Margen de la relación, con el de la configuración como respaldo.
+     */
+    private function marginOf(PlantProduct $plantProduct, PricingConfiguration $config): string
+    {
+        $margin = $plantProduct->margin;
+
+        return ($margin === null || $margin === '')
+            ? (string) $config->margin
+            : (string) $margin;
     }
 
     /**
@@ -129,12 +154,12 @@ class PriceCalculator
         ?int $wholesalerPriceId,
         string $bestPrice,
         PricingConfiguration $config,
+        string $margin,
     ): PricingResult {
         $wholesalerPriceId ??= 0;
 
         $roundedPrice = Decimal::round($bestPrice, 4);                    // P
         $igv = (string) $config->igv_rate;                                // 0.1800
-        $margin = (string) $config->margin;                               // 0.1300
         $perception = (string) $config->perception_rate;                  // 0.0100
 
         $onePlusIgv = bcadd('1', $igv, Decimal::$scale);

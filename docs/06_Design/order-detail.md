@@ -456,6 +456,29 @@ Los cálculos existentes no deben modificarse durante este trabajo.
 
 Este trabajo es principalmente de organización y presentación.
 
+### 12.1 Implementación (ADR-013, 27-09-2026)
+
+El diseño original pedía mostrar **Margen** junto a **Ganancia** (S/0.1300 /
+gal). Con la decisión de negocio de ADR-013 esa caja se **eliminó** del resumen
+y el margen pasó a la tabla de detalle, donde sí tiene sentido por línea:
+
+```
+RESUMEN FINANCIERO
+┌─────────────────────────────────────────────────────────┐
+│ Total galones     Venta             Compra   Ganancia  │
+│ 3,000 gal         S/68,540.40       S/67,401.60  S/390.00│
+└─────────────────────────────────────────────────────────┘
+```
+
+- `Ganancia` lleva un Tooltip con la fórmula: "Suma de (margen × galones) de
+  cada detalle del pedido", porque ya no es una resta de ventas y compras.
+- La Ganancia es `null` (se muestra `—`, no `S/ 0.00`) si ningún detalle tiene
+  margen configurado.
+- El detalle (§13) ganó las columnas **Margen (S/)** y **Monto (margen × gal)**,
+  y el pie de la tabla totaliza la Ganancia con el mismo valor del cuadro
+  (viene de `totals.gain`, calculado con bcmath en el backend).
+- `totals` ya no expone la clave `margin` (el porcentaje).
+
 ## 13. Detalle del pedido
 
 El detalle de productos debe mantenerse completo.
@@ -495,6 +518,40 @@ No eliminar columnas solamente para hacer la tabla más pequeña.
 
 En pantallas pequeñas puede utilizarse scroll horizontal.
 
+### 13.1 Implementación (ADR-013, 27-09-2026)
+
+Columnas implementadas en `Components/Orders/OrderItems.jsx` (las del diseño
+original que faltaban, como "Valor de compra" o "Monto compra", siguen
+pendientes; no se agregaron para no inventar reglas de negocio):
+
+| # | Columna | Origen | Vacío |
+| --- | --- | --- | --- |
+| 1 | SCOP | `order_details.scop` | `-` |
+| 2 | Planta | `details.plant.name` | `-` |
+| 3 | Mayorista | `details.wholesaler.name` | `-` |
+| 4 | Producto | `details.product.name` | `-` |
+| 5 | Factura | placeholder (no hay módulo) | `—` |
+| 6 | Galones | `details.gallons` | `0.00` |
+| 7 | Precio de venta | `details.sale_price` | `0.0000` |
+| 8 | Precio de compra | `attachPricing()` | `—` |
+| 9 | Margen (S/) | `plant_products.margin` | `—` |
+| 10 | Monto (margen × gal) | `margin_amount` (bcmath) | `—` |
+| 11 | Compartimentos | `details.compartments` | `-` |
+| 12 | Total del detalle | `gallons × sale_price` | `S/ 0.00` |
+
+- Las columnas 9 y 10 llevan un Tooltip que explica el origen del dato
+  (`margin_col_hint`, `margin_amount_hint`): el usuario necesita saber de dónde
+  sale el margen sin abrir el módulo de precios.
+- El monto de la línea 10 se muestra en verde (`#10B981`, el `colorSuccess` de la
+  paleta) porque es la línea que alimenta la Ganancia.
+- **Pie de tabla**: `Total de galones` bajo Galones, `Ganancia: S/…` bajo Monto
+  (margen × gal) y `Total de venta: S/…` bajo Total del detalle. La Ganancia del
+  pie toma `totals.gain` del backend, no recalcula en JavaScript, para que el pie
+  y el cuadro del resumen nunca difieran.
+- Bajo **Margen (S/)** y **Precio de compra** el pie deja la celda vacía a
+  propósito: son tasas/precios unitarios, no importes sumables.
+- `scroll={{ x: 'max-content' }}` para no perder columnas en pantallas angostas.
+
 ## 14. Información de depósitos
 
 La información de depósitos debe conservarse.
@@ -530,6 +587,83 @@ con dos bloques:
 - Depósitos por proveedor
 
 No mezclar ambos tipos de depósito.
+
+### 14.1 Implementación (ADR-013, 27-09-2026)
+
+El bloque **Depósitos del cliente** pasó de placeholder a funcional
+(`Components/Orders/OrderDeposits.jsx`); el de **proveedor** se implementó después
+como cuadro derivado (§14.2).
+
+```
+DEPÓSITOS                                              [Agregar depósito]
+┌──────────────────────────────────────────────────────────────────┐
+│ Depósitos del cliente                                            │
+│ ┌────────────┬───────────┬──────────────┬──────────────┬────────┐ │
+│ │ Fecha      │ Banco     │ N° operación │ Monto        │ ⋯      │ │
+│ ├────────────┼───────────┼──────────────┼──────────────┼────────┤ │
+│ │ 22/09/2026 │ Interbank │ OP-0002      │ S/ 250.00    │ 🗑     │ │
+│ │ 20/09/2026 │ BCP       │ 1225595      │ S/ 38,000.00 │ 🗑     │ │
+│ ├────────────┴───────────┴──────────────┼──────────────┼────────┤ │
+│ │ Total depositado                      │ S/ 38,250.00 │        │ │
+│ └───────────────────────────────────────┴──────────────┴────────┘ │
+│ Depósitos por proveedor (ⓘ)                                       │
+│ ┌──────────────────────────────────┬─────────────────────────────┐ │
+│ │ Mayorista                        │        Monto                │ │
+│ ├──────────────────────────────────┼─────────────────────────────┤ │
+│ │ PRIMAX                           │ S/ 67,401.60                │ │
+│ ├──────────────────────────────────┼─────────────────────────────┤ │
+│ │ Total a pagar                    │ S/ 67,401.60                │ │
+│ └──────────────────────────────────┴─────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- Columnas: **Fecha**, **Banco**, **N° de operación**, **Monto** y
+  **Registrado por**; la de acciones (icono `DeleteOutlined` + Tooltip) solo
+  aparece en el modo consulta de un pedido activo.
+- El **Monto** se muestra con **4 decimales** (`S/ 1,234.5678`), que es la
+  precisión con la que se captura y se guarda (`DECIMAL(12,4)`): con 2
+  decimales la suma de las filas no cuadraría con el total de la tabla.
+- El **Total depositado** va en el pie de la tabla y se calcula en pantalla
+  (`SUM(amount)` de las filas activas, sumando en enteros de 0.0001 para no
+  acumular error de coma flotante): no se persiste un total en el pedido, para
+  que dar de baja un depósito nunca deje un total guardado mentiroso.
+- El **modal de alta** pide fecha (`DatePicker` `DD/MM/YYYY`, sin fechas
+  futuras), banco (`AutoComplete` con la lista del sistema y texto libre), N° de
+  operación y monto (`Input` con `prefix="S/"`, máximo 4 decimales). El botón de
+  guardar es un `SubmitButton` (bloquea doble clic).
+- El borrado pide confirmación y aclara que **el voucher adjunto no se
+  modifica**; la fila queda con `is_deleted = 1` (baja lógica, sin papelera).
+- **Sin botón de editar**: un voucher mal capturado se da de baja y se vuelve a
+  registrar, para no reescribir el histórico de caja (ADR-013 §6).
+- En **papelera** el bloque es solo lectura: sin botón de agregar, sin columna de
+  acciones y con el aviso "Los depósitos se conservan con el pedido en la papelera
+  y no se pueden modificar".
+- En pantallas angostas la tabla usa `scroll={{ x: 'max-content' }}` y el botón
+  `width: min(100%, 200px)`.
+
+#### 14.2 Depósitos por proveedor (ADR-013 §14, 27-09-2026)
+
+El bloque de la derecha dejó de ser placeholder: es la **cuenta por pagar a los
+mayoristas**, calculada y de **solo lectura** (a diferencia del bloque del
+cliente, que sí es un registro de caja).
+
+- Una **fila por mayorista** —el de cada línea del pedido, no el ganador global
+  del motor— con el monto que se le debe: `SUM(galones × precio de compra)` de
+  sus líneas. Con datos reales, `/pedidos/17` muestra `PRIMAX S/ 67,401.60`
+  (3000 gal × 22.4672) y `/pedidos/1` muestra dos filas (Mayorista Lima y Mayorista
+  Callao).
+- El **Total a pagar** es exactamente el cuadro **Compra** de la sección
+  Resumen financiero: el backend acumula con la misma operación y sobre las mismas
+  líneas que `total_purchase`, así que cuadra por construcción.
+- Es **dato derivado**: no hay tabla, ni vouchers, ni alta/baja/edición, ni
+  columna de acciones, ni siquiera en la papelera. Si el pedido no tiene ninguna
+  línea con precio de compra, el bloque muestra su estado vacío y **no** un
+  `S/ 0.00` inventado.
+- Tooltip (ⓘ) con la fórmula y la aclaración de que el total coincide con Compra;
+  si hay líneas sin precio de compra, un aviso debajo quantifica cuántas son y
+  que no entran en el total.
+- No se mezcla con el bloque del cliente (el diseño pide no mezclarlos): viven
+  uno al lado del otro, con títulos propios.
 
 ## 15. Documentos adjuntos
 

@@ -1,4 +1,4 @@
-import { Table, Typography } from 'antd';
+import { Table, Tooltip, Typography } from 'antd';
 import SectionCard from '@/Components/SectionCard';
 import useTranslations from '@/hooks/useTranslations';
 import formatMoney from '@/lib/money';
@@ -41,6 +41,39 @@ export default function OrderItems({ order, totals }) {
                 ),
         },
         {
+            // Margen de la relación planta+producto (plant_products.margin,
+            // columna R del Excel). Viene del backend como atributo del detalle.
+            title: (
+                <Tooltip title={t('order.margin_col_hint')}>
+                    <span>{t('order.margin_col')}</span>
+                </Tooltip>
+            ),
+            dataIndex: 'margin',
+            width: 130,
+            align: 'right',
+            render: (v) =>
+                v == null ? <span className="ui-order-empty">—</span> : formatMoney(v, { digits: 4 }),
+        },
+        {
+            // Margen × galones: es la línea que suma el pie y alimenta el cuadro
+            // de ganancia del resumen financiero. El importe lo calcula el
+            // backend con bcmath (margin_amount) para que ambos coincidan.
+            title: (
+                <Tooltip title={t('order.margin_amount_hint')}>
+                    <span>{t('order.margin_amount_col')}</span>
+                </Tooltip>
+            ),
+            dataIndex: 'margin_amount',
+            width: 180,
+            align: 'right',
+            render: (v) =>
+                v == null ? (
+                    <span className="ui-order-empty">—</span>
+                ) : (
+                    <span style={{ fontWeight: 600, color: '#10B981' }}>{formatMoney(v)}</span>
+                ),
+        },
+        {
             title: t('order.compartments'),
             dataIndex: 'compartments',
             align: 'center',
@@ -70,6 +103,9 @@ export default function OrderItems({ order, totals }) {
                         (a, r) => a + Number(r.gallons || 0) * Number(r.sale_price || 0),
                         0,
                     );
+                    // El total de la ganancia se toma de totals.gain (bcmath) para
+                    // que el pie de la tabla y el cuadro Ganancia nunca difieran.
+                    const gain = totals?.gain ?? null;
 
                     return (
                         <Table.Summary.Row>
@@ -81,8 +117,21 @@ export default function OrderItems({ order, totals }) {
                                     {g.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                                 </Typography.Text>
                             </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} colSpan={3} />
+                            <Table.Summary.Cell index={2} colSpan={2} />
+                            {/* Precio de compra */}
+                            <Table.Summary.Cell index={3} />
+                            {/* Margen por galón: no se suma (son tasas distintas) */}
+                            <Table.Summary.Cell index={4} />
                             <Table.Summary.Cell index={5} align="right">
+                                {gain === null ? (
+                                    <span className="ui-order-empty">—</span>
+                                ) : (
+                                    <Typography.Text strong className="ui-summary-value--gain">
+                                        {`${t('order.gain')}: ${formatMoney(gain)}`}
+                                    </Typography.Text>
+                                )}
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={6} align="right">
                                 <Typography.Text strong>
                                     {`${t('order.total_sale')}: `}
                                     {formatMoney(s)}

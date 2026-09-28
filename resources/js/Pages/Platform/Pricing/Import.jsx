@@ -130,6 +130,13 @@ export default function PricingImport({ batch, recentBatches }) {
             render: (v) => (v === null || v === undefined ? '—' : formatMoney(v, { digits: 4 })),
         },
         {
+            title: t('pricing.margin_col_import'),
+            dataIndex: 'margin',
+            width: 120,
+            align: 'right',
+            render: (v) => (v === null || v === undefined ? '—' : formatMoney(v, { digits: 4 })),
+        },
+        {
             title: t('pricing.col_status'),
             dataIndex: 'status',
             width: 130,
@@ -144,11 +151,17 @@ export default function PricingImport({ batch, recentBatches }) {
             render: (e) => (e ? <Text type="danger">{t(`pricing.errors.${e}`)}</Text> : null),
         },
     ];
-
     const calcColumns = [
         { title: t('pricing.col_row'), dataIndex: 'row_number', width: 70 },
         { title: t('pricing.col_plant'), dataIndex: 'plant' },
         { title: t('pricing.col_product'), dataIndex: 'product' },
+        {
+            title: t('pricing.margin_col_import'),
+            dataIndex: 'margin',
+            width: 120,
+            align: 'right',
+            render: (v) => (v === null || v === undefined ? t('pricing.calc_na') : formatMoney(v, { digits: 4 })),
+        },
         {
             title: t('pricing.col_excel_final'),
             dataIndex: 'excel_final',

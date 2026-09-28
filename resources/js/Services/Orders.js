@@ -12,6 +12,8 @@ export const Orders = {
         confirmed: (id) => `/pedidos/${id}/confirmado`,
         changeStatus: (id) => `${base}/${id}/status`,
         detail: (id) => `${base}/${id}/detail`,
+        storeDeposit: (id) => `${base}/${id}/deposits`,
+        destroyDeposit: (id, deposit) => `${base}/${id}/deposits/${deposit}`,
         trashIndex: '/pedidos/papelera',
         trashShow: (id) => `/pedidos/papelera/${id}`,
         trash: (id) => `${base}/${id}/trash`,

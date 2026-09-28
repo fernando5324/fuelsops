@@ -682,6 +682,18 @@ body {
     gap: 8px;
 }
 
+/* --- Depósitos del cliente (ADR-013) --- */
+.ui-deposits-hint {
+    margin: 0 0 12px;
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+.ui-deposits-readonly {
+    margin: 0 !important;
+    font-size: 13px;
+}
+
 /* --- Documentos adjuntos --- */
 .ui-order-docs {
     display: flex;

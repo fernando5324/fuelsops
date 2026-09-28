@@ -28,7 +28,7 @@ const reasons = [
     'reason_other',
 ];
 
-export default function OrdersShow({ order, totals, statuses, trash }) {
+export default function OrdersShow({ order, totals, supplier_payables, statuses, trash }) {
     const { message } = App.useApp();
     const { flash, auth } = usePage().props;
     const { t } = useTranslations();
@@ -109,15 +109,27 @@ export default function OrdersShow({ order, totals, statuses, trash }) {
                     message={t('order.in_trash_banner_title')}
                     description={
                         <Space direction="vertical" size={2}>
-                            <Typography.Text>
-                                {t('order.in_trash_banner_body', {
-                                    date: formatDate(trash.deletion.deleted_at, { withTime: true }),
-                                    by: trash.deletion.deleted_by?.name || '-',
-                                })}
-                            </Typography.Text>
-                            <Typography.Text strong>
-                                {`${t('order.in_trash_banner_reason')} ${trash.deletion.reason || '-'}`}
-                            </Typography.Text>
+                            {trash?.deletion ? (
+                                <>
+                                    <Typography.Text>
+                                        {t('order.in_trash_banner_body', {
+                                            date: formatDate(trash.deletion.deleted_at, { withTime: true }),
+                                            by: trash.deletion.deleted_by?.name || '-',
+                                        })}
+                                    </Typography.Text>
+                                    <Typography.Text strong>
+                                        {`${t('order.in_trash_banner_reason')} ${trash.deletion.reason || '-'}`}
+                                    </Typography.Text>
+                                </>
+                            ) : (
+                                // Un pedido puede estar en la papelera sin fila en
+                                // order_deletions (se dio de baja antes de existir la
+                                // papelera). Antes esto reventaba con
+                                // "Cannot read properties of null (reading 'deleted_at')".
+                                <Typography.Text>
+                                    {t('order.in_trash_banner_no_history')}
+                                </Typography.Text>
+                            )}
                             <Typography.Text>{t('order.in_trash_restore_hint')}</Typography.Text>
                         </Space>
                     }
@@ -182,7 +194,7 @@ export default function OrdersShow({ order, totals, statuses, trash }) {
 
             <OrderItems order={order} totals={totals} />
 
-            <OrderDeposits />
+            <OrderDeposits order={order} supplierPayables={supplier_payables} readOnly={isTrashed} />
 
             <OrderDocuments files={order?.files || []} />
 

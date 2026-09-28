@@ -763,12 +763,22 @@ CREATE TABLE IF NOT EXISTS plant_products (
     product_id BIGINT UNSIGNED NOT NULL,
 
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Baja lógica de la relación planta+producto (se conservan precios e historial)',
+
+    -- Margen S/ de ESTA relación (columna R del Excel "MARGEN SERTOCO"). Es un
+    -- MONTO absoluto, no una tasa: S = Q + margin. Distinto del
+    -- pricing_configurations.margin, que solo es el valor por defecto para las
+    -- relaciones nuevas. IGV y percepción siguen siendo globales.
+    margin DECIMAL(12,4) NOT NULL DEFAULT 0.1300 COMMENT 'Margen S/ por relación (columna R del Excel): S = Q + margen',
 
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
+    -- El único NO incluye is_deleted a propósito: no puede haber dos filas de
+    -- la misma relación. Al dar de baja lógicamente una relación, volver a
+    -- crearla la REVIVE (is_deleted = 0) en vez de insertar una nueva fila.
     UNIQUE KEY uq_plant_products_tenant_plant_product (tenant_id, plant_id, product_id),
 
     INDEX idx_plant_products_tenant (tenant_id),
@@ -939,6 +949,10 @@ CREATE TABLE IF NOT EXISTS price_import_items (
     previous_price DECIMAL(12,4) NULL,
     new_price DECIMAL(12,4) NULL,
 
+    -- Margen S/ de la fila (columna R del Excel), replicado en cada item de la
+    -- fila para poder auditarlo y aplicarlo en confirm() sin releer el archivo.
+    margin DECIMAL(12,4) NULL DEFAULT NULL COMMENT 'Margen S/ leído de la columna R del Excel (por fila)',
+
     status VARCHAR(20) NOT NULL,
     error_message TEXT NULL,
 
@@ -987,7 +1001,10 @@ CREATE TABLE IF NOT EXISTS pricing_configurations (
 
     name VARCHAR(150) NOT NULL,
 
-    margin DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
+    -- margin aquí es solo el VALOR POR DEFECTO para las relaciones nuevas
+    -- (matriz de precios e importación de Excel). El margen con el que calcula
+    -- cada relación vive en plant_products.margin.
+    margin DECIMAL(12,4) NOT NULL DEFAULT 0.1300 COMMENT 'Margen S/ por defecto para relaciones nuevas; el margen que usa el motor es plant_products.margin (columna R del Excel)',
     igv_rate DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
     perception_rate DECIMAL(12,4) NOT NULL DEFAULT 0.0000,
 
@@ -1157,6 +1174,70 @@ CREATE TABLE IF NOT EXISTS order_deletions (
         ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+-- 20. ORDER DEPOSITS (ADR-013)
+
+-- Depósitos del cliente registrados manualmente a partir de los vouchers
+-- (operaciones bancarias) adjuntos al pedido. Un pedido tiene N depósitos y
+-- cada depósito indica banco, número de operación, fecha y monto; el total se
+-- calcula en pantalla (SUM(amount)), no se almacena.
+-- El alta es SIEMPRE manual: los adjuntos (media_files) son vouchers que el
+-- usuario lee y transcribe, el sistema no interpreta sus importes.
+-- Estos depósitos son datos históricos del pedido: la papelera (ADR-011) NO
+-- los toca, por eso la FK a orders es ON DELETE RESTRICT (nunca CASCADE) y el
+-- borrado de un depósito es lógico (is_deleted).
+
+CREATE TABLE IF NOT EXISTS order_deposits (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NOT NULL,
+
+    deposit_date DATE NOT NULL COMMENT 'Fecha del depósito segun el voucher adjunto',
+    bank VARCHAR(100) NOT NULL,
+    operation_number VARCHAR(50) NOT NULL,
+    amount DECIMAL(12,4) NOT NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+
+    INDEX idx_order_deposits_tenant (tenant_id),
+    INDEX idx_order_deposits_order (order_id),
+    INDEX idx_order_deposits_date (deposit_date),
+    INDEX idx_order_deposits_created_by (created_by),
+    INDEX idx_order_deposits_updated_by (updated_by),
+
+    CONSTRAINT fk_order_deposits_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deposits_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deposits_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_deposits_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_order_deposits_amount
+        CHECK (amount > 0)
+) ENGINE=InnoDB;
+
 -- PROVISIONAL ORDER CALCULATIONS
 --
 -- Total gallons:
@@ -1173,6 +1254,14 @@ CREATE TABLE IF NOT EXISTS order_deletions (
 -- detail_total = gallons * sale_price
 -- total_gallons = SUM(gallons)
 -- total_sale = SUM(gallons * sale_price)
+--
+-- Desde ADR-013 la ganancia NO es (total_sale - total_purchase) sino la suma
+-- de los márgenes configurados por relación planta+producto, uno por galón
+-- (plant_products.margin, columna R del Excel):
+-- detail_margin_amount = gallons * plant_products.margin   (por detalle)
+-- gain = SUM(detail_margin_amount)                         (total del pedido)
+-- total_purchase sigue siendo SUM(gallons * precio de compra de la celda
+-- winner de wholesaler_prices) y se muestra aparte en el resumen financiero.
 
 
 -- SEEDS

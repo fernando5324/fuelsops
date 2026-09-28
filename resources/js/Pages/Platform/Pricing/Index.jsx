@@ -5,6 +5,7 @@ import {
     Alert,
     Button,
     Drawer,
+    Dropdown,
     Form,
     Input,
     InputNumber,
@@ -26,6 +27,8 @@ import {
     ExportOutlined,
     CalculatorOutlined,
     UnorderedListOutlined,
+    DeleteOutlined,
+    MoreOutlined,
 } from '@ant-design/icons';
 import PanelLayout from '../../../Layouts/PanelLayout';
 import PageHeader from '@/Components/PageHeader';
@@ -72,8 +75,13 @@ const computePlantSpans = (rows) => {
  */
 export default function PricingIndex({ rows, wholesalers, plants, products, config, filter }) {
     const { message, modal } = App.useApp();
-    const { flash, errors } = usePage().props;
+    const { flash, errors, auth } = usePage().props;
     const { t } = useTranslations();
+
+    // Eliminar una relación es una baja lógica que conserva precios e
+    // historial: se restringe al dueño, igual que la papelera de pedidos
+    // (ADR-011). El backend responde 403 igual (PriceApiController).
+    const isOwner = Boolean(auth?.user?.is_owner);
 
     const [form] = Form.useForm();
     const [relationForm] = Form.useForm();
@@ -107,8 +115,26 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
         }
     });
 
-    useEffect(() => () => clearTimeout(previewTimer.current), []);
+    /**
+     * El margen S/ es obligatorio y no puede ser negativo (0 sí vale: una
+     * relación sin margen es válida, S = Q). El backend acepta hasta 4
+     * decimales; con stringMode llega como string.
+     */
+    const validateMargin = (_, value) => {
+        if (value === null || value === undefined || value === '') {
+            return Promise.reject(new Error(t('common.required')));
+        }
 
+        const number = Number(value);
+
+        if (!Number.isFinite(number) || number < 0) {
+            return Promise.reject(new Error(t('pricing.invalid_margin')));
+        }
+
+        return Promise.resolve();
+    };
+
+    useEffect(() => () => clearTimeout(previewTimer.current), []);
     useEffect(() => {
         if (flash?.success) {
             message.success(flash.success);
@@ -147,7 +173,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
         navigate({ q: q.trim() || undefined, ...next });
     };
 
-    const runPreview = (rawPrices) => {
+    const runPreview = (rawPrices, margin) => {
         if (!editRow) return;
         setPreviewState('loading');
         clearTimeout(previewTimer.current);
@@ -156,6 +182,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                 const { data } = await PricesAdmin.preview({
                     plant_product_id: editRow.id,
                     prices: rawPrices,
+                    margin: margin ?? null,
                 });
                 if (data?.ok) {
                     setPreview(data.result);
@@ -183,7 +210,16 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
 
     const onEditOpenChange = (opened) => {
         if (!opened || !editRow) return;
-        form.setFieldsValue({ prices: initialPrices.current });
+        form.setFieldsValue({
+            prices: initialPrices.current,
+            // El margen se inyecta como STRING decimal ("0.1300"), no como number:
+            // el preview es un POST JSON con la regla `string`, así que un
+            // Number() aquí lo convertía en 422 y el recuadro caía en
+            // `preview_error` ("No se pudo calcular el precio.") al abrir el modal.
+            // `InputNumber` con stringMode muestra el string igual y a partir de
+            // aquí todo lo que sale del Form es string.
+            margin: editRow.margin ?? config?.default_margin,
+        });
         setTimeout(() => onPricesChange(), 0);
     };
 
@@ -195,6 +231,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                 wholesaler_id: item?.wholesaler_id,
                 price: item?.price ?? null,
             })),
+            form.getFieldValue('margin'),
         );
     };
 
@@ -209,6 +246,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                     wholesaler_id: item?.wholesaler_id,
                     price: item?.price ?? null,
                 })),
+                margin: form.getFieldValue('margin') ?? null,
             },
             { preserveScroll: true, onSuccess: () => setEditRow(null) },
         );
@@ -240,11 +278,96 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
         });
     };
 
+    /**
+     * Da de baja la relación planta+producto (baja lógica en el backend: la
+     * fila desaparece de la matriz pero conserva precios e historial). La
+     * confirmación avisa explícitamente de que no se borra nada, para que
+     * nadie la tome por un borrado destructivo.
+     */
+    const confirmDeleteRelation = (row) => {
+        modal.confirm({
+            title: t('pricing.delete_relation_confirm'),
+            content: (
+                <div>
+                    <div>
+                        <Text strong>
+                            {row.plant_name} / {row.product_name}
+                        </Text>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                        {t('pricing.delete_relation_warning')}
+                    </Text>
+                </div>
+            ),
+            okText: t('pricing.delete_relation'),
+            okType: 'danger',
+            cancelText: t('common.cancel'),
+            onOk: () => router.delete(PricesAdmin.routes.relationsDestroy(row.id), { preserveScroll: true }),
+        });
+    };
+
     const onRelationFinish = (values) => {
         router.post(PricesAdmin.routes.relationsStore, values, {
             preserveScroll: true,
             onSuccess: () => setRelationOpen(false),
         });
+    };
+
+    /**
+     * Acciones de la fila como menú desplegable. La columna de acciones crece
+     * con el módulo (5 controles ya no cabían en una columna estrecha), así que
+     * van agrupados bajo un botón "más": agregar una acción futura es un ítem
+     * más del array, sin tocar el ancho de la columna. El Switch activar/
+     * desactivar NO entra en el menú: es un control de estado, se lee de un
+     * vistazo y la columna Estado ya muestra la situación.
+     */
+    const actionMenuItems = (row) => {
+        const items = [
+            { key: 'edit', icon: <EditOutlined />, label: t('pricing.edit_prices') },
+            {
+                key: 'calc',
+                icon: <CalculatorOutlined />,
+                label: row.calc ? (
+                    t('pricing.show_calc')
+                ) : (
+                    // En un menú no cabe la explicación larga: se deja la pista
+                    // corta, porque el Tooltip no funciona en ítems deshabilitados.
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>{t('pricing.show_calc')}</span>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t('pricing.no_calc_short')}
+                        </Text>
+                    </span>
+                ),
+                disabled: !row.calc,
+            },
+            { key: 'history', icon: <HistoryOutlined />, label: t('pricing.history') },
+        ];
+
+        if (isOwner) {
+            items.push({ type: 'divider' });
+            items.push({ key: 'delete', icon: <DeleteOutlined />, label: t('pricing.delete_relation'), danger: true });
+        }
+
+        return items;
+    };
+
+    const onActionClick = (row, key) => {
+        if (key === 'edit') {
+            openEdit(row);
+            return;
+        }
+        if (key === 'calc') {
+            setCalcRow(row);
+            return;
+        }
+        if (key === 'history') {
+            openHistory(row);
+            return;
+        }
+        if (key === 'delete') {
+            confirmDeleteRelation(row);
+        }
     };
 
     const wholesalerColumns = wholesalerOptions.map((w) => ({
@@ -284,6 +407,22 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
             },
         },
         { title: t('pricing.col_product'), dataIndex: 'product_name', fixed: 'left', minWidth: 160 },
+        {
+            title: (
+                <Tooltip title={t('pricing.margin_hint')}>
+                    <span>{t('pricing.margin_col')}</span>
+                </Tooltip>
+            ),
+            dataIndex: 'margin',
+            width: 120,
+            align: 'right',
+            render: (v) =>
+                v === null || v === undefined ? (
+                    <Text type="secondary">—</Text>
+                ) : (
+                    <Text strong>{formatMoney(v, { digits: 4 })}</Text>
+                ),
+        },
         ...wholesalerColumns,
         {
             title: t('pricing.col_final'),
@@ -316,26 +455,21 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
         {
             title: t('common.actions'),
             key: 'actions',
-            width: 210,
+            width: 90,
             align: 'center',
             fixed: 'right',
             render: (_, row) => (
-                <Space size={0}>
-                    <Tooltip title={t('pricing.edit_prices')}>
-                        <Button type="text" icon={<EditOutlined />} aria-label={t('pricing.edit_prices')} onClick={() => openEdit(row)} />
-                    </Tooltip>
-                    <Tooltip title={row.calc ? t('pricing.show_calc') : t('pricing.no_calc_row')}>
-                        <Button
-                            type="text"
-                            icon={<CalculatorOutlined />}
-                            aria-label={t('pricing.show_calc')}
-                            disabled={!row.calc}
-                            onClick={() => setCalcRow(row)}
-                        />
-                    </Tooltip>
-                    <Tooltip title={t('pricing.history')}>
-                        <Button type="text" icon={<HistoryOutlined />} aria-label={t('pricing.history')} onClick={() => openHistory(row)} />
-                    </Tooltip>
+                <Space size={4}>
+                    <Dropdown
+                        trigger={['click']}
+                        placement="bottomRight"
+                        menu={{
+                            items: actionMenuItems(row),
+                            onClick: ({ key }) => onActionClick(row, key),
+                        }}
+                    >
+                        <Button type="text" icon={<MoreOutlined />} aria-label={t('pricing.more_actions')} />
+                    </Dropdown>
                     <Switch
                         size="small"
                         checked={Boolean(row.is_active)}
@@ -357,10 +491,17 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
         { title: t('pricing.col_plant'), dataIndex: 'plant_name', width: 150 },
         { title: t('pricing.col_product'), dataIndex: 'product_name', width: 160 },
         {
+            title: t('pricing.margin_col'),
+            dataIndex: 'margin',
+            width: 120,
+            align: 'right',
+            render: (v) => formatMoney(v, { digits: 4 }),
+        },
+        {
             title: t('pricing.col_winner'),
             key: 'winner',
             width: 150,
-            render: (_, row) => winnerName(row.calc) ?? '—',
+            render: (_, row) => winnerName(row.calc) ?? '-',
         },
         {
             title: t('pricing.col_final'),
@@ -525,6 +666,23 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                 afterOpenChange={onEditOpenChange}
             >
                 <Form form={form} layout="vertical" onFinish={savePrices} onValuesChange={onPricesChange}>
+                    <Form.Item
+                        name="margin"
+                        label={t('pricing.margin_field')}
+                        extra={t('pricing.margin_hint')}
+                        rules={[{ validator: validateMargin }]}
+                        style={{ marginBottom: 12 }}
+                    >
+                        <InputNumber
+                            stringMode
+                            precision={4}
+                            min={0}
+                            step={0.01}
+                            prefix="S/"
+                            style={{ width: '100%' }}
+                        />
+                    </Form.Item>
+
                     <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
                         {t('pricing.price_empty_hint')}
                     </Text>
@@ -688,7 +846,14 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                 destroyOnHidden
                 mask={{ closable: false }}
                 afterOpenChange={(opened) => {
-                    if (opened) relationForm.resetFields();
+                    if (!opened) return;
+                    relationForm.resetFields();
+                    // String decimal, no number: el POST de relations valida el
+                    // margen como `string` y un 0.13 numérico daba 422 al crear
+                    // la relación sin tocar este campo.
+                    relationForm.setFieldsValue({
+                        margin: config?.default_margin ?? '0.1300',
+                    });
                 }}
             >
                 <Form form={relationForm} layout="vertical" onFinish={onRelationFinish}>
@@ -697,6 +862,21 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                     </Form.Item>
                     <Form.Item name="product_id" label={t('pricing.col_product')} rules={[{ required: true, message: t('common.required') }]}>
                         <Select showSearch optionFilterProp="label" options={productOptions} placeholder={t('pricing.col_product')} />
+                    </Form.Item>
+                    <Form.Item
+                        name="margin"
+                        label={t('pricing.margin_field')}
+                        extra={t('pricing.margin_default_hint')}
+                        rules={[{ validator: validateMargin }]}
+                    >
+                        <InputNumber
+                            stringMode
+                            precision={4}
+                            min={0}
+                            step={0.01}
+                            prefix="S/"
+                            style={{ width: '100%' }}
+                        />
                     </Form.Item>
                 </Form>
             </Modal>
