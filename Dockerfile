@@ -27,6 +27,8 @@ FROM php:8.3-apache
 
 WORKDIR /var/www/html
 
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+
 
 # ------------------------------------------------------------
 # System dependencies
@@ -67,10 +69,12 @@ RUN docker-php-ext-configure gd \
 # ------------------------------------------------------------
 # Apache
 # ------------------------------------------------------------
-RUN a2enmod rewrite
-
-COPY docker/apache/000-default.conf \
-     /etc/apache2/sites-available/000-default.conf
+RUN a2enmod rewrite \
+    && sed -ri \
+        -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+        /etc/apache2/sites-available/*.conf \
+        /etc/apache2/apache2.conf \
+        /etc/apache2/conf-available/*.conf
 
 
 # ------------------------------------------------------------
