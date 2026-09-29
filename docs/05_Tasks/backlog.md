@@ -468,6 +468,15 @@ a `Done` sin la regla real confirmada.
     - Prioridad: Alta
     - Fase: E
     - Criterio de aceptación: validación de compartimentos definida.
+    - Avance 2026-09-28 (ADR-015): la parte **técnica** está implementada y
+      verificada de punta a punta (tabla `order_compartments`, formulario
+      público, edición, consulta y papelera; E2E 74/74 y headless 43/43 con
+      consola limpia). Se mantiene pendiente porque la sección exige la regla
+      real confirmada por Sertoco: hoy la implementación **solo advierte**
+      (no bloquea) cuando la suma de los compartimentos no cuadra con el total
+      del detalle, y no se inventó ninguna regla extra. Ver la nota de
+      implementación de `docs/03_Decisions/ADR-015.md` y "Estado actual" en
+      `AGENTS.md`.
 
 - [ ] T-072 — Confirmar reglas de SCOP.
     - Prioridad: Media

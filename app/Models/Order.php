@@ -83,6 +83,18 @@ class Order extends Model
             ->orderByDesc('id');
     }
 
+    /**
+     * Distribución por compartimentos de la cisterna (ADR-015). Se ordena por
+     * su numeración 1..N; la cantidad de compartimentos es la cantidad de
+     * filas (no se persiste en orders).
+     */
+    public function compartments(): HasMany
+    {
+        return $this->hasMany(OrderCompartment::class, 'order_id')
+            ->orderBy('compartment_number')
+            ->orderBy('id');
+    }
+
     public function files(): MorphMany
     {
         return $this->morphMany(MediaFile::class, 'model');

@@ -37,14 +37,20 @@ const { Text } = Typography;
 
 const fieldFromError = (key) => {
     if (!key) return undefined;
-    if (key.startsWith('details.')) {
+    if (key.startsWith('details.') || key.startsWith('compartments.')) {
         const parts = key.split('.');
-        return ['details', Number(parts[1]), parts.slice(2).join('.')];
+        return [parts[0], Number(parts[1]), parts.slice(2).join('.')];
     }
     return key.split('.');
 };
 
 const normFile = (e) => (Array.isArray(e) ? e : e?.fileList || []);
+
+const formatGallons = (value) =>
+    Number(value || 0).toLocaleString('es-ES', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 
 export default function PublicOrderCreate({ advisors, plants, wholesalers, products }) {
     const [form] = Form.useForm();
@@ -82,6 +88,8 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
     );
 
     const updates = Form.useWatch('details', form) || [];
+    const compartmentCount = Number(Form.useWatch('compartment_count', form)) || 0;
+    const compartmentRows = Form.useWatch('compartments', form) || [];
 
     useEffect(() => {
         const gallons = updates.reduce((a, d) => a + (Number(d?.gallons) || 0), 0);
@@ -91,6 +99,70 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
         );
         setTotals({ gallons, sale });
     }, [updates]);
+
+    // ADR-015: la cantidad declarada de compartimentos gobierna la cantidad de
+    // filas de la tarjeta "Distribución por compartimentos". Al cambiar se
+    // conservan las filas que ya estaban completas y se completan las nuevas.
+    useEffect(() => {
+        // Con `min={1}` una cantidad de 0 solo puede significar "aún no declarada"
+        // (el campo vacío, o `useWatch` sin valor en el primer render): no se
+        // toca la lista, así limpiar el campo no descarta lo ya capturado.
+        if (compartmentCount === 0) {
+            return;
+        }
+
+        const current = form.getFieldValue('compartments');
+        const rows = Array.isArray(current) ? current : [];
+
+        if (rows.length === compartmentCount) {
+            return;
+        }
+
+        const next = rows.slice(0, compartmentCount);
+
+        while (next.length < compartmentCount) {
+            next.push({ detail_key: null, product_id: null, scop: '', volume: null });
+        }
+
+        form.setFieldValue('compartments', next);
+    }, [compartmentCount, form]);
+
+    // Al elegir la línea del detalle, el producto y el SCOP quedan fijados por
+    // esa línea (no se pueden inventar) y el volumen se precarga con sus galones
+    // para que el usuario solo lo ajuste si reparte la carga en varios
+    // compartimentos.
+    const onCompartmentDetailChange = (index, detailKey) => {
+        const detail = updates[detailKey];
+
+        form.setFields([
+            { name: ['compartments', index, 'detail_key'], value: detailKey },
+            { name: ['compartments', index, 'product_id'], value: detail?.product_id ?? null },
+            { name: ['compartments', index, 'scop'], value: detail?.scop ?? '' },
+            { name: ['compartments', index, 'volume'], value: Number(detail?.gallons) || null },
+        ]);
+    };
+
+    // Opciones de la tarjeta de compartimentos: solo las líneas del detalle que
+    // ya tienen SCOP y producto ("No se puede agregar otro que no esté en este
+    // listado"). El backend lo vuelve a validar.
+    const detailLineOptions = updates
+        .map((detail, index) => ({ detail, index }))
+        .filter(({ detail }) => detail?.product_id && detail?.scop)
+        .map(({ detail, index }) => ({
+            value: index,
+            label: t('order.compartment_detail_option', {
+                index: index + 1,
+                scop: detail.scop,
+                product: (products || []).find((p) => p.id === detail.product_id)?.name || '-',
+            }),
+        }));
+
+    const compartmentTotal = compartmentRows.reduce((a, c) => a + (Number(c?.volume) || 0), 0);
+
+    // El desajuste entre la suma de compartimentos y el total del detalle NO
+    // bloquea el registro (ADR-015): se avisa en pantalla.
+    const compartmentMismatch =
+        compartmentCount > 0 && Math.abs(compartmentTotal - totals.gallons) > 0.005;
 
     const runLookup = async (rawTaxId) => {
         const taxId = (rawTaxId || '').trim();
@@ -198,6 +270,8 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
             data.append('notes', values.notes);
         }
 
+        data.append('compartment_count', values.compartment_count);
+
         (values.details || []).forEach((d, i) => {
             data.append(`details[${i}][scop]`, d.scop);
             data.append(`details[${i}][plant_id]`, d.plant_id);
@@ -205,7 +279,12 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
             data.append(`details[${i}][product_id]`, d.product_id);
             data.append(`details[${i}][gallons]`, d.gallons);
             data.append(`details[${i}][sale_price]`, d.sale_price ?? 0);
-            data.append(`details[${i}][compartments]`, d.compartments ?? 1);
+        });
+
+        (values.compartments || []).forEach((c, i) => {
+            data.append(`compartments[${i}][product_id]`, c.product_id);
+            data.append(`compartments[${i}][scop]`, c.scop);
+            data.append(`compartments[${i}][volume]`, c.volume);
         });
 
         (values.files || []).forEach((f, i) => {
@@ -396,6 +475,20 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                         title={t('order.section_detail')}
                         description={t('order.section_detail_help')}
                     >
+                        <Form.Item
+                            name="compartment_count"
+                            label={t('order.compartment_count')}
+                            extra={t('order.compartment_count_hint')}
+                            rules={[{ required: true, message: `${t('order.compartment_count')} ${t('common.required')}` }]}
+                        >
+                            <InputNumber
+                                min={1}
+                                max={50}
+                                precision={0}
+                                style={{ width: 'min(100%, 220px)' }}
+                            />
+                        </Form.Item>
+
                         <Form.List name="details" initialValue={[{}]}>
                             {(detailFields, { add, remove }) => (
                                 <>
@@ -408,7 +501,6 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                                             <span>{t('order.product')}</span>
                                             <span>{t('order.gallons')}</span>
                                             <span>{`${t('order.sale_price_short')} S/`}</span>
-                                            <span>{t('order.compartments')}</span>
                                             <span />
                                         </div>
 
@@ -475,13 +567,6 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                                                     <InputNumber min={0} prefix="S/" style={{ width: '100%' }} step={0.0001} />
                                                 </Form.Item>
 
-                                                <Form.Item
-                                                    name={[field.name, 'compartments']}
-                                                    label={t('order.compartments')}
-                                                >
-                                                    <InputNumber min={1} style={{ width: '100%' }} />
-                                                </Form.Item>
-
                                                 <div className="ui-products-actions">
                                                     {detailFields.length > 1 && (
                                                         <Tooltip title={t('order.remove_product')}>
@@ -513,6 +598,86 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                             )}
                         </Form.List>
                     </SectionCard>
+
+                    {compartmentCount > 0 && (
+                        <SectionCard
+                            title={t('order.section_compartments')}
+                            description={t('order.section_compartments_help')}
+                        >
+                            <div className="ui-products ui-products--compartments">
+                                <div className="ui-products-head">
+                                    <span>{t('order.product')}</span>
+                                    <span>{t('order.volume_gal')}</span>
+                                    <span>{t('order.scop_number')}</span>
+                                    <span>{t('order.comp_short')}</span>
+                                </div>
+
+                                {Array.from({ length: compartmentCount }, (_, index) => (
+                                    <div className="ui-product-row" key={index}>
+                                        <Form.Item
+                                            name={['compartments', index, 'detail_key']}
+                                            label={t('order.product')}
+                                            rules={[{ required: true, message: t('order.compartment_detail_required') }]}
+                                        >
+                                            <Select
+                                                showSearch
+                                                optionFilterProp="label"
+                                                placeholder={t('order.compartment_detail_placeholder')}
+                                                options={detailLineOptions}
+                                                onChange={(value) => onCompartmentDetailChange(index, value)}
+                                            />
+                                        </Form.Item>
+
+                                        {/* Producto y SCOP los fija la línea del detalle elegida. */}
+                                        <Form.Item name={['compartments', index, 'product_id']} hidden>
+                                            <Input />
+                                        </Form.Item>
+                                        <Form.Item name={['compartments', index, 'scop']} hidden>
+                                            <Input />
+                                        </Form.Item>
+
+                                        <Form.Item
+                                            name={['compartments', index, 'volume']}
+                                            label={t('order.volume_gal')}
+                                            rules={[{ required: true, message: t('common.required') }]}
+                                        >
+                                            <InputNumber min={0.01} style={{ width: '100%' }} step={0.01} />
+                                        </Form.Item>
+
+                                        <div className="ui-product-scop">
+                                            <span className="ui-product-scop-label">
+                                                {`${t('order.scop_number')}:`}
+                                            </span>
+                                            {compartmentRows[index]?.scop || '-'}
+                                        </div>
+
+                                        <div className="ui-product-index">{index + 1}</div>
+                                    </div>
+                                ))}
+
+                                <div className="ui-products-foot">
+                                    <span className="ui-products-foot-label">
+                                        {t('order.compartments_total')}
+                                    </span>
+                                    <span className="ui-products-foot-value">
+                                        {`${formatGallons(compartmentTotal)} gal`}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {compartmentMismatch && (
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    className="ui-compartments-warning"
+                                    message={t('order.compartments_mismatch_warning', {
+                                        sum: formatGallons(compartmentTotal),
+                                        total: formatGallons(totals.gallons),
+                                    })}
+                                />
+                            )}
+                        </SectionCard>
+                    )}
 
                     <SectionCard
                         title={t('order.section_observations')}
@@ -550,7 +715,7 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                             <div className="ui-summary-item">
                                 <Text className="ui-summary-label">{t('order.total_gallons')}</Text>
                                 <div className="ui-summary-value ui-summary-value--info">
-                                    {`${totals.gallons.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gal`}
+                                    {`${formatGallons(totals.gallons)} gal`}
                                 </div>
                                 <Text className="ui-summary-hint">{t('order.summary_gallons_hint')}</Text>
                             </div>

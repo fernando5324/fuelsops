@@ -70,6 +70,7 @@ class TrashController extends Controller
                 'details.product',
                 'files',
                 'deposits.createdBy:id,name',
+                'compartments.product',
                 'statusHistory.status',
                 'statusHistory.previousStatus',
                 'statusHistory.createdBy:id,name',
@@ -77,9 +78,9 @@ class TrashController extends Controller
             ])
             ->findOrFail((int) $order);
 
-        // La ficha en papelera se lee igual que la activa (precios, márgenes y
-        // depósitos se conservan: ADR-011 §9/§12/§21); lo único que no se
-        // permite es escribir sobre ella.
+        // La ficha en papelera se lee igual que la activa (precios, márgenes,
+        // depósitos y distribución por compartimentos se conservan:
+        // ADR-011 §9/§12/§21); lo único que no se permite es escribir sobre ella.
         $orders->attachPricing($order);
 
         return Inertia::render('Platform/Orders/Show', [

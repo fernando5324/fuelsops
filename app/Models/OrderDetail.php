@@ -21,13 +21,11 @@ class OrderDetail extends Model
         'product_id',
         'gallons',
         'sale_price',
-        'compartments',
     ];
 
     protected $casts = [
         'gallons' => 'decimal:2',
         'sale_price' => 'decimal:4',
-        'compartments' => 'integer',
     ];
 
     public function order(): BelongsTo

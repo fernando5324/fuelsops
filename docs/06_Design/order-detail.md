@@ -536,8 +536,12 @@ pendientes; no se agregaron para no inventar reglas de negocio):
 | 8 | Precio de compra | `attachPricing()` | `—` |
 | 9 | Margen (S/) | `plant_products.margin` | `—` |
 | 10 | Monto (margen × gal) | `margin_amount` (bcmath) | `—` |
-| 11 | Compartimentos | `details.compartments` | `-` |
-| 12 | Total del detalle | `gallons × sale_price` | `S/ 0.00` |
+| 11 | Total del detalle | `gallons × sale_price` | `S/ 0.00` |
+
+- La columna "Compartimentos" que el diseño original tenía entre "Monto
+  (margen × gal)" y "Total del detalle" **ya no existe** (ADR-015, 28-09-2026):
+  la distribución por compartimentos se registra en su propia tarjeta
+  (§13.2). `order_details.compartments` (VARCHAR libre) se eliminó de la BD.
 
 - Las columnas 9 y 10 llevan un Tooltip que explica el origen del dato
   (`margin_col_hint`, `margin_amount_hint`): el usuario necesita saber de dónde
@@ -551,6 +555,65 @@ pendientes; no se agregaron para no inventar reglas de negocio):
 - Bajo **Margen (S/)** y **Precio de compra** el pie deja la celda vacía a
   propósito: son tasas/precios unitarios, no importes sumables.
 - `scroll={{ x: 'max-content' }}` para no perder columnas en pantallas angostas.
+
+### 13.2 Distribución por compartimentos (ADR-015, 28-09-2026)
+
+Nueva sección que reemplaza la columna "Compartimentos" del detalle. Va
+**justo después** de "Detalle del pedido" y antes de "Depósitos del cliente"
+(orden en `Show.jsx`: `OrderItems` → `OrderCompartments` → `OrderDeposits`):
+explica en qué repartos de la cisterna va la carga antes de hablar de dinero.
+
+**En consulta** (`Components/Orders/OrderCompartments.jsx`, read-only también en
+la papelera, con el aviso `compartments_read_only`):
+
+| # | Columna | Origen | Vacío |
+| --- | --- | --- | --- |
+| 1 | Comp | `compartment_number` (numeración 1..n, no dato guardado) | `-` |
+| 2 | Producto | `compartments.product.name` | `-` |
+| 3 | N° SCOP | `compartments.scop` | `-` |
+| 4 | Volumen (gal) | `compartments.volume` | `0,00` |
+
+- Pie: `Total de galones` con la **suma de los compartimentos**
+  (`compartments_total`), no el total del detalle: son magnitudes distintas y
+  confundirlas es justo lo que el aviso de desajuste busca señalar.
+- Estado vacío: "No hay compartimentos registrados." (pedidos históricos, que
+  nunca se les inventó una distribución).
+- Sin acciones: los compartimentos no se editan sueltos, se editan con el
+  pedido (ver abajo).
+
+**En captura y edición** (misma tarjeta en `Pages/Public/Orders/Create.jsx` y
+`Pages/Platform/Orders/Edit.jsx`):
+
+- El campo **"Cantidad de compartimentos"** (entero, obligatorio, 1..50) se
+  ubica **arriba** de la tarjeta "Detalle del pedido" (antes de la tabla de
+  líneas, para que el usuario declare el reparto mientras ve el detalle), con la
+  ayuda `compartment_count_hint`. **No se persiste**: gobierna cuántas filas se
+  despliegan y debe coincidir con ellas.
+- Solo al declarar la cantidad se despliega la tarjeta "Distribución por
+  compartimentos" (`section_compartments`, con la ayuda
+  `section_compartments_help`). Antes no hay tarjeta.
+- Cada fila trae un `Select` "Producto" (con buscador, placeholder
+  `compartment_detail_placeholder`) que **solo lista las líneas del detalle**
+  (`#:index · :scop · :product`) y un `InputNumber` de volumen (2 decimales,
+  mínimo 0,01). El N° SCOP no se escribe: es de solo lectura y se deriva de la
+  línea elegida (`N° SCOP:A-1`). Encabezado: `Producto · Volumen (gal) · N°
+  SCOP · Comp` (en la tabla de consulta el orden es inverso, `Comp` primero,
+  porque allí la numeración manda).
+- `product_id` y `scop` viajan en campos **ocultos** de cada fila y los fija el
+  `Select`; el backend los revalida (422 si el producto/SCOP no es del detalle).
+- Al elegir línea se precarga el volumen con los galones de esa línea (para
+  ajustar el reparto).
+- Pie de la tarjeta: `Total de galones` con la suma y sufijo `gal`
+  (`formatGallons`).
+- Las filas sin línea elegida muestran el error
+  `compartment_detail_required` al enviar, y el aviso de desajuste
+  (`compartments_mismatch_warning`, con `:sum` y `:total`) aparece **sin
+  bloquear** el registro: el ADR no fijó esa regla de negocio (ver T-071).
+- Rejilla `ui-products--compartments` con 4 columnas en desktop
+  (`--ui-product-cols`: producto `minmax(140px,1.4fr)`, volumen `110px`, N° SCOP
+  `120px`, Comp `44px`) y el mismo comportamiento móvil que la tabla de
+  detalle (tarjetas apiladas bajo 992px). Los `Form.Item hidden` de
+  `product_id`/`scop` no ocupan celda (`display: none`).
 
 ## 14. Información de depósitos
 
@@ -728,7 +791,9 @@ Detalle
 - Planta.
 - Mayorista.
 - Producto.
-- Compartimentos.
+- Compartimentos. → **retirado del detalle por ADR-015** (28-09-2026): la
+  distribución de la carga se registra en su propia tarjeta "Distribución por
+  compartimentos" (§13.2), con producto, volumen y N° SCOP por compartimento.
 - Galones.
 - Precio de venta.
 - Precio de compra, si corresponde al modelo actual.

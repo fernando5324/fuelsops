@@ -2,12 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesCompartments;
 use App\Services\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class PublicOrderStoreRequest extends FormRequest
 {
+    use ValidatesCompartments;
+
     public function authorize(): bool
     {
         return true;
@@ -17,7 +20,7 @@ class PublicOrderStoreRequest extends FormRequest
     {
         $tenantScope = fn ($query) => $query->where('tenant_id', TenantContext::id());
 
-        return [
+        return array_merge([
             'order_date' => ['nullable', 'date'],
             'advisor_id' => ['required', 'integer', Rule::exists('advisors', 'id')->where($tenantScope)],
             'customer' => ['required', 'array'],
@@ -38,10 +41,9 @@ class PublicOrderStoreRequest extends FormRequest
             'details.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where($tenantScope)],
             'details.*.gallons' => ['required', 'numeric', 'gt:0'],
             'details.*.sale_price' => ['nullable', 'numeric', 'min:0'],
-            'details.*.compartments' => ['nullable', 'integer', 'min:1'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'mimes:pdf,jpg,jpeg', 'max:10240'],
-        ];
+        ], $this->compartmentRules());
     }
 
     /**
@@ -51,7 +53,7 @@ class PublicOrderStoreRequest extends FormRequest
      */
     public function attributes(): array
     {
-        return [
+        return array_merge([
             'order_date' => __('order.order_date'),
             'advisor_id' => __('order.advisor'),
             'customer.tax_id' => 'RUC',
@@ -71,8 +73,7 @@ class PublicOrderStoreRequest extends FormRequest
             'details.*.product_id' => __('order.product'),
             'details.*.gallons' => __('order.gallons'),
             'details.*.sale_price' => __('order.sale_price'),
-            'details.*.compartments' => __('order.compartments'),
             'files' => __('order.attachments'),
-        ];
+        ], $this->compartmentAttributes());
     }
 }

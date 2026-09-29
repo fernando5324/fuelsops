@@ -24,6 +24,7 @@ orders
 order_details
 order_files
 order_deposits          ADR-013
+order_compartments      ADR-015
 ```
 
 ## Relationships
@@ -69,6 +70,12 @@ orders
   │ 1:N   (ADR-013: un depósito por voucher del cliente)
   ▼
 order_deposits
+
+orders
+  │
+  │ 1:N   (ADR-015: un compartimento por fila de la distribución)
+  ▼
+order_compartments
 ```
 
 ## Organizations (multi-tenant)
@@ -167,13 +174,14 @@ An order stores:
 -   Tractor
 -   Notes
 
-An order also **has** (never stores inline): details, deposits, files, status
-history and deletion history.
+An order also **has** (never stores inline): details, deposits, compartment
+distribution, files, status history and deletion history.
 
 ``` text
 orders (1)
     ├── order_details (N)
     ├── order_deposits (N)     ADR-013
+    ├── order_compartments (N)  ADR-015
     ├── media_files (N)        polimórfica
     ├── order_status_history (N)
     └── order_deletions (N)    ADR-011 (histórico de papelera)
@@ -191,13 +199,41 @@ Current fields:
 -   `product_id`
 -   `gallons`
 -   `sale_price`
--   `compartments`
 
 The SCOP belongs to the order detail.
 
-`compartments` represents the number/portion of tanker compartments
-assigned to the product in that detail. The current prototype stores it
-as a number.
+## Order compartments (ADR-015)
+
+Each order can also declare how its load is distributed across the tanker
+compartments. It is a separate table because the compartment distribution is not
+a property of a single detail: the same number of compartments applies to the
+whole order, and a detail's gallons can be split across several of them.
+
+Current fields:
+
+-   `compartment_number` (the 1..N numbering of the compartment)
+-   `product_id` (product of the detail line loaded in that compartment)
+-   `scop` (SCOP of that same detail line)
+-   `volume` (gallons assigned to the compartment)
+
+Rules:
+
+- The product and the SCOP of each row always come from a line of that order's
+  `order_details`; the backend rejects any other combination, so the
+  distribution can never reference a product that is not in the order.
+- The three values are stored denormalized instead of a foreign key to
+  `order_details` because the panel's order update soft-deletes the details and
+  creates new ones: a foreign key would end up pointing at logically deleted
+  rows.
+- The number of compartments is not stored: it is the row count of the order
+  (`COUNT(*)`), the same way the deposit total is computed on screen (ADR-013).
+  The form sends it so the request can check it against the number of rows.
+- The sum of `volume` is shown as the total of gallons at the end of the list,
+  but it does not block the order: a mismatch with the total of the details is
+  only a visual warning.
+- Like deposits, the data is historical for the order: the trash (ADR-011) does
+  not touch it, the foreign key to `orders` is `ON DELETE RESTRICT` and rows are
+  soft-deleted (`is_deleted`).
 
 ## Provisional calculations
 

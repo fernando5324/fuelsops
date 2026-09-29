@@ -631,8 +631,6 @@ CREATE TABLE IF NOT EXISTS order_details (
     gallons DECIMAL(12,2) NOT NULL,
     sale_price DECIMAL(12,4) NOT NULL,
 
-    compartments TINYINT UNSIGNED NOT NULL,
-
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
     created_by BIGINT UNSIGNED NOT NULL,
@@ -694,10 +692,7 @@ CREATE TABLE IF NOT EXISTS order_details (
         CHECK (gallons > 0),
 
     CONSTRAINT chk_order_details_sale_price
-        CHECK (sale_price >= 0),
-
-    CONSTRAINT chk_order_details_compartments
-        CHECK (compartments > 0)
+        CHECK (sale_price >= 0)
 ) ENGINE=InnoDB;
 
 
@@ -1236,6 +1231,90 @@ CREATE TABLE IF NOT EXISTS order_deposits (
 
     CONSTRAINT chk_order_deposits_amount
         CHECK (amount > 0)
+) ENGINE=InnoDB;
+
+-- 21. ORDER COMPARTMENTS (ADR-015)
+--
+-- Distribución por compartimentos de la cisterna: qué producto, de qué línea del
+-- detalle y cuántos galones van en cada compartimento. Un pedido tiene N
+-- compartimentos, uno por fila, y `compartment_number` es su numeración 1..N.
+-- El formulario público declara cuántos compartimentos se necesitan y dibuja esa
+-- cantidad de filas; el producto y el SCOP de cada fila SIEMPRE provienen de una
+-- línea de `order_details` del mismo pedido (el backend lo valida), por eso la
+-- tabla guarda esos tres datos denormalizados en lugar de una FK a
+-- `order_details`: la edición del pedido en el panel da de baja y recrea los
+-- detalles (§ update de OrderService), y una FK quedaría apuntando a filas
+-- borradas lógicamente.
+-- La cantidad de compartimentos NO se persiste: es el número de filas
+-- (COUNT(*)), igual que el total de los depósitos se calcula en pantalla
+-- (ADR-013). El formulario la envía y se valida contra la cantidad de filas.
+-- La suma de `volume` se muestra al pie como total de galones, pero no bloquea el
+-- registro del pedido si no cuadra con el total del detalle: es un aviso visual
+-- (ADR-015).
+-- Estos datos son históricos del pedido: la papelera (ADR-011) NO los toca, por
+-- eso la FK a orders es ON DELETE RESTRICT (nunca CASCADE). El borrado de un
+-- compartimento es lógico (is_deleted); la edición del pedido en el panel da de
+-- baja los previos y crea los nuevos.
+-- Sin índice único en (order_id, compartment_number): el scope global de
+-- LogicalDelete escondería la fila dada de baja y el INSERT chocaría con el
+-- índice (mismo gotcha que plant_products). La unicidad la valida el request.
+
+CREATE TABLE IF NOT EXISTS order_compartments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NOT NULL,
+
+    compartment_number TINYINT UNSIGNED NOT NULL COMMENT 'Numeración 1..N del compartimento',
+    product_id BIGINT UNSIGNED NOT NULL COMMENT 'Producto de la línea del detalle asignada al compartimento',
+    scop VARCHAR(50) NOT NULL COMMENT 'SCOP de la línea del detalle',
+    volume DECIMAL(12,2) NOT NULL COMMENT 'Volumen en galones asignado al compartimento',
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+
+    INDEX idx_order_compartments_tenant (tenant_id),
+    INDEX idx_order_compartments_order (order_id),
+    INDEX idx_order_compartments_product (product_id),
+    INDEX idx_order_compartments_created_by (created_by),
+    INDEX idx_order_compartments_updated_by (updated_by),
+
+    CONSTRAINT fk_order_compartments_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_compartments_order
+        FOREIGN KEY (order_id)
+        REFERENCES orders (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_compartments_product
+        FOREIGN KEY (product_id)
+        REFERENCES products (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_compartments_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_order_compartments_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_order_compartments_volume
+        CHECK (volume > 0)
 ) ENGINE=InnoDB;
 
 -- PROVISIONAL ORDER CALCULATIONS

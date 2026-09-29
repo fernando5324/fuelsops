@@ -7,17 +7,17 @@ use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\MediaFile;
 use App\Models\Order;
+use App\Models\OrderCompartment;
 use App\Models\OrderDeletion;
 use App\Models\OrderDeposit;
 use App\Models\OrderDetail;
 use App\Models\OrderStatus;
 use App\Models\OrderStatusHistory;
 use App\Models\Plant;
-use App\Models\PlantProduct;
 use App\Models\Product;
 use App\Models\Vehicle;
 use App\Models\Wholesaler;
-use App\Models\WholesalerPrice;
+use App\Services\Pricing\PricingMatrix;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -30,8 +30,10 @@ use Throwable;
  */
 class OrderService
 {
-    public function __construct(private readonly MediaService $mediaService)
-    {
+    public function __construct(
+        private readonly MediaService $mediaService,
+        private readonly PricingMatrix $matrix,
+    ) {
     }
 
     /**
@@ -39,7 +41,8 @@ class OrderService
      * El cliente se reutiliza por tax_id o se crea (ADR-004).
      *
      * @param  array  $data  ['order_date', 'advisor_id', 'customer', 'driver_id',
-     *                       'tanker_id', 'tractor_id', 'notes', 'details', 'files']
+     *                       'tanker_id', 'tractor_id', 'notes', 'details',
+     *                       'compartments', 'files']
      */
     public function create(array $data): Order
     {
@@ -85,10 +88,11 @@ class OrderService
                     'product_id' => $detail['product_id'],
                     'gallons' => $detail['gallons'],
                     'sale_price' => $detail['sale_price'] ?? 0,
-                    'compartments' => $detail['compartments'] ?? 1,
                     'created_by' => $this->actorId(),
                 ]);
             }
+
+            $this->storeCompartments($order, $data['compartments'] ?? []);
 
             foreach (($data['files'] ?? []) as $upload) {
                 $this->mediaService->storeFor($order, $upload, [
@@ -107,7 +111,7 @@ class OrderService
             return $order;
         });
 
-        $order->load(['details', 'files', 'status']);
+        $order->load(['details', 'compartments', 'files', 'status']);
 
         return $order;
     }
@@ -117,6 +121,8 @@ class OrderService
      * - Cliente/chofer/vehículos se reutilizan o crean (find-or-create).
      * - Detalle: soft-delete de los actuales y alta de los nuevos (aditivo,
      *   conservando auditoría y referencias históricas).
+     * - Distribución por compartimentos (ADR-015): mismo criterio que el
+     *   detalle, baja lógica de los previos y alta de los nuevos.
      * - Archivos: añade los nuevos y elimina (disco + baja lógica) los que
      *   vengan en `remove_files`, siempre restringidos a los del pedido.
      */
@@ -156,10 +162,11 @@ class OrderService
                     'product_id' => $detail['product_id'],
                     'gallons' => $detail['gallons'],
                     'sale_price' => $detail['sale_price'] ?? 0,
-                    'compartments' => $detail['compartments'] ?? 1,
                     'created_by' => $this->actorId(),
                 ]);
             }
+
+            $this->replaceCompartments($order, $data['compartments'] ?? []);
 
             foreach (($data['files'] ?? []) as $upload) {
                 $this->mediaService->storeFor($order, $upload, [
@@ -457,6 +464,49 @@ class OrderService
         ]);
     }
 
+    /**
+     * Registra la distribución por compartimentos del pedido (ADR-015). Una
+     * fila por compartimento, en el orden en que llegan (que es el orden en que
+     * el usuario las ve): `compartment_number` es la numeración 1..N.
+     *
+     * El producto y el SCOP los valida el request (deben ser una línea del
+     * detalle que se está guardando), aquí solo se persisten.
+     */
+    public function storeCompartments(Order $order, array $rows): void
+    {
+        $number = 0;
+
+        foreach ($rows as $row) {
+            $number++;
+
+            OrderCompartment::create([
+                'tenant_id' => $order->tenant_id,
+                'order_id' => $order->id,
+                'compartment_number' => $number,
+                'product_id' => $row['product_id'],
+                'scop' => trim((string) $row['scop']),
+                'volume' => $row['volume'],
+                'created_by' => $this->actorId(),
+            ]);
+        }
+    }
+
+    /**
+     * Reemplaza la distribución por compartimentos al editar el pedido: da de
+     * baja lógica las filas actuales y crea las nuevas (mismo criterio que el
+     * detalle, para conservar auditoría y no perder histórico). La cantidad de
+     * compartimentos es la cantidad de filas, por eso no hay nada que actualizar
+     * en `orders`.
+     */
+    public function replaceCompartments(Order $order, array $rows): void
+    {
+        foreach ($order->compartments()->get() as $compartment) {
+            $compartment->delete();
+        }
+
+        $this->storeCompartments($order, $rows);
+    }
+
     private function purchaseKey(OrderDetail $detail): string
     {
         return "{$detail->plant_id}-{$detail->wholesaler_id}-{$detail->product_id}";
@@ -480,71 +530,20 @@ class OrderService
     }
 
     /**
-     * Datos de referencia de precios de los detalles del pedido, en dos pasos:
-     *  1. plant_products resuelve (tenant, planta, producto) -> plant_product_id
-     *     y trae su `margin` (con withDeleted: una relación dada de baja sigue
-     *     dando su margen al pedido, igual que sus precios).
-     *  2. wholesaler_prices MIN(price) por (plant_product_id, wholesaler_id),
-     *     solo precios válidos (> 0, misma regla del motor ADR-010); una celda
-     *     vacía (NULL) o 0 explícito == sin precio disponible.
+     * Datos de referencia de precios de los detalles del pedido. La resolución
+     * de la matriz (relación con withDeleted + MIN(price) por celda, solo
+     * precios > 0) vive en `PricingMatrix`, compartida con el reporte
+     * "Avance de ventas" (ADR-017) para que ambos Outlet usen la misma regla.
      *
      * @return array{purchases: array<string,string>, margins: array<string,string>}
      */
     private function pricingFor(Order $order): array
     {
-        $empty = ['purchases' => [], 'margins' => []];
-
         if ($order->details->isEmpty()) {
-            return $empty;
+            return ['purchases' => [], 'margins' => []];
         }
 
-        $plantProducts = PlantProduct::withDeleted()
-            ->whereIn('plant_id', $order->details->pluck('plant_id')->unique())
-            ->whereIn('product_id', $order->details->pluck('product_id')->unique())
-            ->get()
-            ->keyBy(fn (PlantProduct $pp) => "{$pp->plant_id}-{$pp->product_id}");
-
-        if ($plantProducts->isEmpty()) {
-            return $empty;
-        }
-
-        $prices = WholesalerPrice::query()
-            ->whereIn('wholesaler_id', $order->details->pluck('wholesaler_id')->unique())
-            ->where('price', '>', '0')
-            ->whereIn('plant_product_id', $plantProducts->pluck('id')->all())
-            ->select('plant_product_id', 'wholesaler_id', DB::raw('MIN(price) AS price'))
-            ->groupBy('plant_product_id', 'wholesaler_id')
-            ->get()
-            ->mapWithKeys(
-                fn (WholesalerPrice $wp) => [
-                    $this->cellKey($wp->plant_product_id, $wp->wholesaler_id) => (string) $wp->price,
-                ]
-            );
-
-        $purchases = [];
-        $margins = [];
-
-        foreach ($order->details as $detail) {
-            $plantProduct = $plantProducts->get($this->marginKey($detail));
-
-            if ($plantProduct === null) {
-                continue;
-            }
-
-            $cell = $this->cellKey($plantProduct->id, $detail->wholesaler_id);
-            if (isset($prices[$cell])) {
-                $purchases[$this->purchaseKey($detail)] = $prices[$cell];
-            }
-
-            $margins[$this->marginKey($detail)] = (string) $plantProduct->margin;
-        }
-
-        return ['purchases' => $purchases, 'margins' => $margins];
-    }
-
-    private function cellKey(int $plantProductId, int $wholesalerId): string
-    {
-        return "{$plantProductId}-{$wholesalerId}";
+        return $this->matrix->resolve(PricingMatrix::linesFrom($order->details));
     }
 
     public function statuses(): Collection
@@ -568,9 +567,9 @@ class OrderService
      *  5. orders.is_deleted = 1.
      *  6. Marca los media afectados como is_deleted = 1 SIN borrar el archivo
      *     físico (§10; no usa MediaService::destroy a propósito).
-     * Los depósitos del cliente (ADR-013) NO se tocan: son información
-     * financiera del pedido y sobreviven a la papelera (§9/§12/§21); solo se
-     * copian al snapshot como dato histórico.
+     * Los depósitos del cliente (ADR-013) y la distribución por compartimentos
+     * (ADR-015) NO se tocan: son datos del pedido que sobreviven a la papelera
+     * (§9/§12/§21); solo se copian al snapshot como dato histórico.
      *
      * @throws ValidationException si el pedido ya está eliminado o el motivo falta.
      */
@@ -700,6 +699,7 @@ class OrderService
             'details.wholesaler',
             'details.product',
             'deposits',
+            'compartments.product',
         ]);
 
         $details = $order->details->map(fn (OrderDetail $detail) => [
@@ -724,6 +724,17 @@ class OrderService
             'amount' => (string) $deposit->amount,
         ])->all();
 
+        // Distribución por compartimentos (ADR-015): datos históricos del
+        // pedido que la papelera no toca y se copian al snapshot (solo los
+        // activos, igual que los depósitos).
+        $compartments = $order->compartments->map(fn (OrderCompartment $compartment) => [
+            'compartment_number' => (int) $compartment->compartment_number,
+            'product_id' => $compartment->product_id,
+            'product_name' => $compartment->product?->name,
+            'scop' => $compartment->scop,
+            'volume' => (string) $compartment->volume,
+        ])->all();
+
         return [
             'order' => [
                 'id' => $order->id,
@@ -741,6 +752,7 @@ class OrderService
             ] : null,
             'details' => $details,
             'deposits' => $deposits,
+            'compartments' => $compartments,
         ];
     }
 
@@ -762,6 +774,12 @@ class OrderService
             $checks[] = ['type' => Plant::class, 'id' => $detail['plant_id'] ?? null];
             $checks[] = ['type' => Wholesaler::class, 'id' => $detail['wholesaler_id'] ?? null];
             $checks[] = ['type' => Product::class, 'id' => $detail['product_id'] ?? null];
+        }
+
+        // Distribución por compartimentos (ADR-015): sus productos también
+        // tienen que ser de la organización destino.
+        foreach ($data['compartments'] ?? [] as $compartment) {
+            $checks[] = ['type' => Product::class, 'id' => $compartment['product_id'] ?? null];
         }
 
         foreach ($checks as $check) {

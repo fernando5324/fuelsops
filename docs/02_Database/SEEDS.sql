@@ -91,10 +91,10 @@ INSERT IGNORE INTO orders (id, tenant_id, order_date, status_id, advisor_id, cus
     (1, 1, NOW(), 1, 1, 1, 1, 1, 3, 'Pedido de muestra pendiente.',                                                      1),
     (2, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 2, 2, 2, 2, 2, 4, 'Pedido de muestra atendido.',                             1);
 
-INSERT IGNORE INTO order_details (id, tenant_id, order_id, scop, plant_id, wholesaler_id, product_id, gallons, sale_price, compartments, created_by) VALUES
-    (1, 1, 1, 'SCOP-0001', 1, 1, 1, 500.00, 12.5000, 2, 1),
-    (2, 1, 1, 'SCOP-0002', 2, 2, 3, 300.00, 11.3000, 1, 1),
-    (3, 1, 2, 'SCOP-0003', 1, 1, 2, 900.00, 13.1000, 3, 1);
+INSERT IGNORE INTO order_details (id, tenant_id, order_id, scop, plant_id, wholesaler_id, product_id, gallons, sale_price, created_by) VALUES
+    (1, 1, 1, 'SCOP-0001', 1, 1, 1, 500.00, 12.5000, 1),
+    (2, 1, 1, 'SCOP-0002', 2, 2, 3, 300.00, 11.3000, 1),
+    (3, 1, 2, 'SCOP-0003', 1, 1, 2, 900.00, 13.1000, 1);
 
 -- Historial de estado para el pedido de muestra atendido.
 INSERT IGNORE INTO order_status_history (id, tenant_id, order_id, status_id, previous_status_id, notes, created_by) VALUES

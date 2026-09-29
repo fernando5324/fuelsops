@@ -159,10 +159,46 @@ body {
 /* --- Detalle del pedido: tabla en desktop, tarjetas en móvil --- */
 .ui-products {
     --ui-product-cols: 40px minmax(80px, 0.8fr) minmax(100px, 1fr) minmax(110px, 1fr)
-        minmax(140px, 1.4fr) 100px 116px 78px 40px;
+        minmax(140px, 1.4fr) 100px 116px 40px;
     border: 1px solid var(--color-border);
     border-radius: 10px;
     overflow: hidden;
+}
+
+/* Distribución por compartimentos (ADR-015): producto, volumen, N° SCOP y la
+   numeración del compartimento. Reusa la grilla del detalle con sus propias
+   columnas. */
+.ui-products--compartments {
+    --ui-product-cols: minmax(140px, 1.4fr) 110px 120px 44px;
+}
+
+.ui-product-scop {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    font-size: 14px;
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.ui-product-scop-label {
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.ui-products-foot {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--color-border);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ui-compartments-warning {
+    margin-top: 12px;
 }
 
 .ui-products-head {
@@ -254,8 +290,27 @@ body {
         font-size: 12px;
     }
 
+    .ui-product-scop-label {
+        display: none;
+    }
+
     .ui-products-actions .ui-remove-btn.ant-btn-text {
         align-self: center;
+    }
+
+    .ui-products-foot {
+        grid-template-columns: var(--ui-product-cols);
+        align-items: center;
+    }
+
+    .ui-products-foot-label {
+        grid-column: 1 / 4;
+        text-align: right;
+        color: var(--color-muted);
+    }
+
+    .ui-products-foot-value {
+        text-align: right;
     }
 }
 
@@ -530,6 +585,34 @@ body {
     padding: 16px; */
 }
 
+/* --- Reporte: gráficos y tabla de totales (ADR-017) --- */
+.ui-chart {
+    width: 100%;
+}
+
+.ui-chart--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ui-chart__loading {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.65);
+}
+
+.ui-report-total > td {
+    font-weight: 600;
+    background: #F1F5F9;
+}
+
 /* --- Confirmación de pedido --- */
 .ui-confirm-hero {
     text-align: center;
@@ -692,6 +775,13 @@ body {
 .ui-deposits-readonly {
     margin: 0 !important;
     font-size: 13px;
+}
+
+/* Aviso de "solo lectura" de un bloque del detalle en la papelera. */
+.ui-order-readonly-note {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--color-muted);
 }
 
 /* --- Documentos adjuntos --- */

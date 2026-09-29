@@ -38,14 +38,20 @@ const { Text } = Typography;
 
 const fieldFromError = (key) => {
     if (!key) return undefined;
-    if (key.startsWith('details.')) {
+    if (key.startsWith('details.') || key.startsWith('compartments.')) {
         const parts = key.split('.');
-        return ['details', Number(parts[1]), parts.slice(2).join('.')];
+        return [parts[0], Number(parts[1]), parts.slice(2).join('.')];
     }
     return key.split('.');
 };
 
 const normFile = (e) => (Array.isArray(e) ? e : e?.fileList || []);
+
+const formatGallons = (value) =>
+    Number(value || 0).toLocaleString('es-ES', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 
 function DocumentRow({ file, removed, onToggle }) {
     const { t } = useTranslations();
@@ -106,6 +112,32 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
         }
     }, [errors, form, message]);
 
+    // Las líneas del detalle se reconstruyen tal cual venían del pedido; cada
+    // compartimento guardado se enlaza con la línea de la que vino (mismo
+    // producto + SCOP) para que la fila muestre desde el inicio su producto,
+    // su N° SCOP y el volumen registrado.
+    const initialDetails = (order?.details || []).map((d) => ({
+        scop: d.scop,
+        plant_id: d.plant_id,
+        wholesaler_id: d.wholesaler_id,
+        product_id: d.product_id,
+        gallons: Number(d.gallons),
+        sale_price: Number(d.sale_price || 0),
+    }));
+
+    const initialCompartments = [...(order?.compartments || [])]
+        .sort((a, b) => (a.compartment_number || 0) - (b.compartment_number || 0))
+        .map((c) => ({
+            detail_key: initialDetails.findIndex(
+                (d) =>
+                    Number(d.product_id) === Number(c.product_id) &&
+                    (d.scop || '').trim() === (c.scop || '').trim(),
+            ),
+            product_id: c.product_id,
+            scop: c.scop,
+            volume: Number(c.volume),
+        }));
+
     const initialValues = {
         order_date: dayjs(order?.order_date),
         advisor_id: order?.advisor_id,
@@ -119,19 +151,15 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
         },
         tanker: { license_plate: order?.tanker?.license_plate || '' },
         tractor: { license_plate: order?.tractor?.license_plate || '' },
-        details: (order?.details || []).map((d) => ({
-            scop: d.scop,
-            plant_id: d.plant_id,
-            wholesaler_id: d.wholesaler_id,
-            product_id: d.product_id,
-            gallons: Number(d.gallons),
-            sale_price: Number(d.sale_price || 0),
-            compartments: d.compartments ?? 1,
-        })),
+        details: initialDetails,
+        compartment_count: initialCompartments.length,
+        compartments: initialCompartments,
         notes: order?.notes || '',
     };
 
     const updates = Form.useWatch('details', form) || [];
+    const compartmentCount = Number(Form.useWatch('compartment_count', form)) || 0;
+    const compartmentRows = Form.useWatch('compartments', form) || [];
 
     useEffect(() => {
         const gallons = updates.reduce((a, d) => a + (Number(d?.gallons) || 0), 0);
@@ -141,6 +169,68 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
         );
         setTotals({ gallons, sale });
     }, [updates]);
+
+    // ADR-015: la cantidad declarada de compartimentos gobierna la cantidad de
+    // filas de la tarjeta "Distribución por compartimentos". Al cambiar se
+    // conservan las filas ya capturadas y se completan las nuevas.
+    useEffect(() => {
+        // `useWatch` todavía no devolvió nada en el primer render (0), y los
+        // initialValues del pedido se aplican en ese mismo montaje: sin esta
+        // guarda el efecto corría con 0 y `slice(0, 0)` vaciaba la
+        // distribución que venía cargada. Con `min={1}` una cantidad de 0 solo
+        // puede significar "aún no declarada".
+        if (compartmentCount === 0) {
+            return;
+        }
+
+        const current = form.getFieldValue('compartments');
+        const rows = Array.isArray(current) ? current : [];
+
+        if (rows.length === compartmentCount) {
+            return;
+        }
+
+        const next = rows.slice(0, compartmentCount);
+
+        while (next.length < compartmentCount) {
+            next.push({ detail_key: null, product_id: null, scop: '', volume: null });
+        }
+
+        form.setFieldValue('compartments', next);
+    }, [compartmentCount, form]);
+
+    // Al elegir la línea del detalle, el producto y el SCOP quedan fijados por
+    // esa línea y el volumen se precarga con sus galones.
+    const onCompartmentDetailChange = (index, detailKey) => {
+        const detail = updates[detailKey];
+
+        form.setFields([
+            { name: ['compartments', index, 'detail_key'], value: detailKey },
+            { name: ['compartments', index, 'product_id'], value: detail?.product_id ?? null },
+            { name: ['compartments', index, 'scop'], value: detail?.scop ?? '' },
+            { name: ['compartments', index, 'volume'], value: Number(detail?.gallons) || null },
+        ]);
+    };
+
+    // Solo se ofrecen las líneas del detalle que ya tienen SCOP y producto.
+    const detailLineOptions = updates
+        .map((detail, index) => ({ detail, index }))
+        .filter(({ detail }) => detail?.product_id && detail?.scop)
+        .map(({ detail, index }) => ({
+            value: index,
+            label: t('order.compartment_detail_option', {
+                index: index + 1,
+                scop: detail.scop,
+                product: (products || []).find((p) => p.id === detail.product_id)?.name || '-',
+            }),
+        }));
+
+    const compartmentTotal = compartmentRows.reduce((a, c) => a + (Number(c?.volume) || 0), 0);
+
+    // Aviso (no bloquea) si la suma de compartimentos no cuadra con el total del
+    // detalle (ADR-015).
+    const compartmentMismatch =
+        compartmentCount > 0 && Math.abs(compartmentTotal - totals.gallons) > 0.005;
 
     const runCustomerLookup = async (rawTaxId) => {
         const taxId = (rawTaxId || '').trim();
@@ -234,6 +324,8 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
             data.append('notes', values.notes);
         }
 
+        data.append('compartment_count', values.compartment_count);
+
         (values.details || []).forEach((d, i) => {
             data.append(`details[${i}][scop]`, d.scop);
             data.append(`details[${i}][plant_id]`, d.plant_id);
@@ -241,7 +333,12 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
             data.append(`details[${i}][product_id]`, d.product_id);
             data.append(`details[${i}][gallons]`, d.gallons);
             data.append(`details[${i}][sale_price]`, d.sale_price ?? 0);
-            data.append(`details[${i}][compartments]`, d.compartments ?? 1);
+        });
+
+        (values.compartments || []).forEach((c, i) => {
+            data.append(`compartments[${i}][product_id]`, c.product_id);
+            data.append(`compartments[${i}][scop]`, c.scop);
+            data.append(`compartments[${i}][volume]`, c.volume);
         });
 
         (values.files || []).forEach((f, i) => {
@@ -426,6 +523,20 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                     title={t('order.section_detail')}
                     description={t('order.section_detail_help')}
                 >
+                    <Form.Item
+                        name="compartment_count"
+                        label={t('order.compartment_count')}
+                        extra={t('order.compartment_count_hint')}
+                        rules={[{ required: true, message: `${t('order.compartment_count')} ${t('common.required')}` }]}
+                    >
+                        <InputNumber
+                            min={1}
+                            max={50}
+                            precision={0}
+                            style={{ width: 'min(100%, 220px)' }}
+                        />
+                    </Form.Item>
+
                     <Form.List name="details">
                         {(detailFields, { add, remove }) => (
                             <>
@@ -438,7 +549,6 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                         <span>{t('order.product')}</span>
                                         <span>{t('order.gallons')}</span>
                                         <span>{`${t('order.sale_price_short')} S/`}</span>
-                                        <span>{t('order.compartments')}</span>
                                         <span />
                                     </div>
 
@@ -505,13 +615,6 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                                 <InputNumber min={0} prefix="S/" style={{ width: '100%' }} step={0.0001} />
                                             </Form.Item>
 
-                                            <Form.Item
-                                                name={[field.name, 'compartments']}
-                                                label={t('order.compartments')}
-                                            >
-                                                <InputNumber min={1} style={{ width: '100%' }} />
-                                            </Form.Item>
-
                                             <div className="ui-products-actions">
                                                 {detailFields.length > 1 && (
                                                     <Tooltip title={t('order.remove_product')}>
@@ -543,6 +646,84 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                         )}
                     </Form.List>
                 </SectionCard>
+
+                {compartmentCount > 0 && (
+                    <SectionCard
+                        title={t('order.section_compartments')}
+                        description={t('order.section_compartments_help')}
+                    >
+                        <div className="ui-products ui-products--compartments">
+                            <div className="ui-products-head">
+                                <span>{t('order.product')}</span>
+                                <span>{t('order.volume_gal')}</span>
+                                <span>{t('order.scop_number')}</span>
+                                <span>{t('order.comp_short')}</span>
+                            </div>
+
+                            {Array.from({ length: compartmentCount }, (_, index) => (
+                                <div className="ui-product-row" key={index}>
+                                    <Form.Item
+                                        name={['compartments', index, 'detail_key']}
+                                        label={t('order.product')}
+                                        rules={[{ required: true, message: t('order.compartment_detail_required') }]}
+                                    >
+                                        <Select
+                                            showSearch
+                                            optionFilterProp="label"
+                                            placeholder={t('order.compartment_detail_placeholder')}
+                                            options={detailLineOptions}
+                                            onChange={(value) => onCompartmentDetailChange(index, value)}
+                                        />
+                                    </Form.Item>
+
+                                    {/* Producto y SCOP los fija la línea del detalle elegida. */}
+                                    <Form.Item name={['compartments', index, 'product_id']} hidden>
+                                        <Input />
+                                    </Form.Item>
+                                    <Form.Item name={['compartments', index, 'scop']} hidden>
+                                        <Input />
+                                    </Form.Item>
+
+                                    <Form.Item
+                                        name={['compartments', index, 'volume']}
+                                        label={t('order.volume_gal')}
+                                        rules={[{ required: true, message: t('common.required') }]}
+                                    >
+                                        <InputNumber min={0.01} style={{ width: '100%' }} step={0.01} />
+                                    </Form.Item>
+
+                                    <div className="ui-product-scop">
+                                        <span className="ui-product-scop-label">
+                                            {`${t('order.scop_number')}:`}
+                                        </span>
+                                        {compartmentRows[index]?.scop || '-'}
+                                    </div>
+
+                                    <div className="ui-product-index">{index + 1}</div>
+                                </div>
+                            ))}
+
+                            <div className="ui-products-foot">
+                                <span className="ui-products-foot-label">{t('order.compartments_total')}</span>
+                                <span className="ui-products-foot-value">
+                                    {`${formatGallons(compartmentTotal)} gal`}
+                                </span>
+                            </div>
+                        </div>
+
+                        {compartmentMismatch && (
+                            <Alert
+                                type="warning"
+                                showIcon
+                                className="ui-compartments-warning"
+                                message={t('order.compartments_mismatch_warning', {
+                                    sum: formatGallons(compartmentTotal),
+                                    total: formatGallons(totals.gallons),
+                                })}
+                            />
+                        )}
+                    </SectionCard>
+                )}
 
                 <SectionCard
                     title={t('order.section_observations')}
@@ -607,7 +788,7 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                         <div className="ui-summary-item">
                             <Text className="ui-summary-label">{t('order.total_gallons')}</Text>
                             <div className="ui-summary-value ui-summary-value--info">
-                                {`${totals.gallons.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} gal`}
+                                {`${formatGallons(totals.gallons)} gal`}
                             </div>
                             <Text className="ui-summary-hint">{t('order.summary_gallons_hint')}</Text>
                         </div>

@@ -18,6 +18,7 @@ import {
     TagsOutlined,
     TagOutlined,
     MoneyCollectOutlined,
+    BarChartOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
 import logo from '../../images/logo.png';
@@ -89,6 +90,17 @@ export default function PanelLayout({ children }) {
                 { key: 'precios-import', label: <Link href="/precios/importar">{t('menus.pricing_import')}</Link> },
             ],
         },
+        {
+            key: 'reportes',
+            icon: <BarChartOutlined />,
+            label: t('menus.reports'),
+            children: [
+                {
+                    key: 'reportes-ventas',
+                    label: <Link href="/reportes/avance-ventas">{t('menus.sales_report')}</Link>,
+                },
+            ],
+        },
     ];
 
     let selectedKey = 'dashboard';
@@ -104,15 +116,18 @@ export default function PanelLayout({ children }) {
         selectedKey = 'precios-import';
     } else if (path.startsWith('/precios')) {
         selectedKey = 'precios-admin';
+    } else if (path.startsWith('/reportes')) {
+        selectedKey = 'reportes-ventas';
     }
 
-    const [openKeys, setOpenKeys] = useState(['catalogos', path.startsWith('/pedidos') ? 'pedidos' : null, path.startsWith('/precios') ? 'precios' : null].filter(Boolean));
+    const [openKeys, setOpenKeys] = useState(['catalogos', path.startsWith('/pedidos') ? 'pedidos' : null, path.startsWith('/precios') ? 'precios' : null, path.startsWith('/reportes') ? 'reportes' : null].filter(Boolean));
 
     useEffect(() => {
         setOpenKeys((prev) => {
             const next = new Set(prev);
             if (path.startsWith('/pedidos')) next.add('pedidos');
             if (path.startsWith('/precios')) next.add('precios');
+            if (path.startsWith('/reportes')) next.add('reportes');
             return [...next];
         });
     }, [path]);

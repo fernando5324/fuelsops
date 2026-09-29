@@ -74,12 +74,6 @@ export default function OrderItems({ order, totals }) {
                 ),
         },
         {
-            title: t('order.compartments'),
-            dataIndex: 'compartments',
-            align: 'center',
-            render: (v) => v ?? '-',
-        },
-        {
             title: t('order.detail_total'),
             align: 'right',
             render: (_, r) =>
@@ -120,9 +114,8 @@ export default function OrderItems({ order, totals }) {
                             <Table.Summary.Cell index={2} colSpan={2} />
                             {/* Precio de compra */}
                             <Table.Summary.Cell index={3} />
-                            {/* Margen por galón: no se suma (son tasas distintas) */}
-                            <Table.Summary.Cell index={4} />
-                            <Table.Summary.Cell index={5} align="right">
+                            {/* Margen por galón: es una tasa, no se suma */}
+                            <Table.Summary.Cell index={4} align="right">
                                 {gain === null ? (
                                     <span className="ui-order-empty">—</span>
                                 ) : (
@@ -131,7 +124,7 @@ export default function OrderItems({ order, totals }) {
                                     </Typography.Text>
                                 )}
                             </Table.Summary.Cell>
-                            <Table.Summary.Cell index={6} align="right">
+                            <Table.Summary.Cell index={5} align="right">
                                 <Typography.Text strong>
                                     {`${t('order.total_sale')}: `}
                                     {formatMoney(s)}

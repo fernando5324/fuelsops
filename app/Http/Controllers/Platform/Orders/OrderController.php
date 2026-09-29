@@ -92,6 +92,7 @@ class OrderController extends Controller
             'details.product',
             'files',
             'deposits.createdBy:id,name',
+            'compartments.product',
             'statusHistory.status',
             'statusHistory.previousStatus',
             'statusHistory.createdBy:id,name',
@@ -127,6 +128,7 @@ class OrderController extends Controller
             'details.wholesaler',
             'details.product',
             'files',
+            'compartments.product',
         ]);
 
         return Inertia::render('Platform/Orders/Edit', [

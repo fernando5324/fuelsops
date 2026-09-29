@@ -13,6 +13,7 @@ import OrderHeader from '@/Components/Orders/OrderHeader';
 import OrderSummary from '@/Components/Orders/OrderSummary';
 import OrderInfo from '@/Components/Orders/OrderInfo';
 import OrderItems from '@/Components/Orders/OrderItems';
+import OrderCompartments from '@/Components/Orders/OrderCompartments';
 import OrderDeposits from '@/Components/Orders/OrderDeposits';
 import OrderDocuments from '@/Components/Orders/OrderDocuments';
 import OrderObservations from '@/Components/Orders/OrderObservations';
@@ -140,8 +141,8 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
 
             <OrderSummary totals={totals} />
 
-            <Row gutter={[16, 0]}>
-                <Col xs={24} lg={12}>
+            <Row gutter={[16, 0]} className='ui-card-gap'>
+                <Col xs={24} lg={12} className='ui-card-gap'>
                     <OrderInfo
                         title={t('order.customer_block')}
                         index={1}
@@ -151,7 +152,7 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
                         ]}
                     />
                 </Col>
-                <Col xs={24} lg={12}>
+                <Col xs={24} lg={12} className='ui-card-gap'>
                     <OrderInfo
                         title={t('order.order_block')}
                         index={2}
@@ -161,11 +162,11 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
                                 value: formatDate(order?.order_date, { withTime: true }),
                             },
                             { label: t('order.advisor'), value: order?.advisor?.name || '-' },
-                            { label: t('order.status'), value: order?.status?.name || '-' },
+                            /* { label: t('order.status'), value: order?.status?.name || '-' }, */
                         ]}
                     />
                 </Col>
-                <Col xs={24} lg={12}>
+                <Col xs={24} lg={12} className='ui-card-gap'>
                     <OrderInfo
                         title={t('order.driver_block')}
                         index={3}
@@ -178,7 +179,7 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
                         ]}
                     />
                 </Col>
-                <Col xs={24} lg={12}>
+                <Col xs={24} lg={12} className='ui-card-gap'>
                     <OrderInfo
                         title={t('order.vehicle_block')}
                         index={4}
@@ -193,6 +194,8 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
             {!isTrashed ? <OrderStatusChanger order={order} statuses={statuses} /> : null}
 
             <OrderItems order={order} totals={totals} />
+
+            <OrderCompartments order={order} readOnly={isTrashed} />
 
             <OrderDeposits order={order} supplierPayables={supplier_payables} readOnly={isTrashed} />
 

@@ -20,6 +20,7 @@ use App\Http\Controllers\Platform\Products\ProductController;
 use App\Http\Controllers\Platform\Pricing\PriceApiController;
 use App\Http\Controllers\Platform\Pricing\PriceController;
 use App\Http\Controllers\Platform\Pricing\PriceImportController;
+use App\Http\Controllers\Platform\Reports\SalesReportController;
 use App\Http\Controllers\Platform\Users\UserApiController;
 use App\Http\Controllers\Platform\Users\UserController;
 use App\Http\Controllers\Platform\Vehicles\VehicleApiController;
@@ -107,6 +108,12 @@ Route::middleware('auth')->group(function () {
         Route::get('importar/{batch}/preview', [PriceImportController::class, 'preview'])->name('preview');
         Route::post('importar/{batch}', [PriceImportController::class, 'confirm'])->name('confirm');
         Route::post('importar/{batch}/cancelar', [PriceImportController::class, 'cancel'])->name('cancel');
+    });
+
+    // Reportes (ADR-017). Vista única: la agregación completa (cards, evolución
+    // diaria y productos) llega en una sola respuesta Inertia, sin API aparte.
+    Route::prefix('reportes')->name('reports.')->group(function () {
+        Route::get('avance-ventas', [SalesReportController::class, 'index'])->name('sales.index');
     });
 
     // Perfil
