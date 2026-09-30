@@ -155,4 +155,4 @@ EXPOSE 80
 # ------------------------------------------------------------
 # Start Apache
 # ------------------------------------------------------------
-CMD ["bash", "-c", "ls -la /etc/apache2/mods-enabled/ | grep mpm && apache2ctl -M | grep mpm && apache2-foreground"]
+CMD ["bash", "-c", "echo '=== MPM FILES ==='; find /etc/apache2 -type f -o -type l | sort | xargs grep -Hn 'LoadModule.*mpm_' 2>/dev/null; echo '=== ENABLED ==='; ls -la /etc/apache2/mods-enabled/ | grep mpm; echo '=== APACHE CONFIG ==='; apache2ctl -t"]
