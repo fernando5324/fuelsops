@@ -69,12 +69,14 @@ RUN docker-php-ext-configure gd \
 # ------------------------------------------------------------
 # Apache
 # ------------------------------------------------------------
-RUN a2enmod rewrite
-
-RUN sed -ri \
-    -e 's!/var/www/html!/var/www/html/public!g' \
-    /etc/apache2/sites-available/000-default.conf
-
+RUN a2dismod mpm_event mpm_worker \
+    && a2enmod mpm_prefork \
+    && a2enmod rewrite \
+    && sed -ri \
+        -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+        /etc/apache2/sites-available/*.conf \
+        /etc/apache2/apache2.conf \
+        /etc/apache2/conf-available/*.conf
 
 # ------------------------------------------------------------
 # Composer
@@ -147,4 +149,4 @@ EXPOSE 80
 # ------------------------------------------------------------
 # Start Apache
 # ------------------------------------------------------------
-CMD ["tail", "-f", "/dev/null"]
+CMD ["apache2-foreground"]
