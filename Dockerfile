@@ -151,10 +151,11 @@ RUN php artisan config:clear \
 # ------------------------------------------------------------
 # Port
 # ------------------------------------------------------------
+RUN echo "FUELSOPS-DOCKER-BUILD-2026-09-30" > /etc/fuelsops-build
 EXPOSE 80
 
 
 # ------------------------------------------------------------
 # Start Apache
 # ------------------------------------------------------------
-CMD ["apache2-foreground"]
+CMD ["bash", "-c", "echo '=== BUILD MARKER ==='; cat /etc/fuelsops-build; echo '=== MPM ==='; ls -la /etc/apache2/mods-enabled/ | grep mpm; echo '=== APACHE ==='; apache2ctl -t"]
