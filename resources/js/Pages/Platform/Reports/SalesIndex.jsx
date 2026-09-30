@@ -1,57 +1,30 @@
-import { Alert, Button, Card, Col, DatePicker, Row, Select, Space, Statistic, Table, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Col, DatePicker, message, Row, Select, Space, Statistic, Table, Tooltip, Typography } from 'antd';
 import {
     BarChartOutlined,
     CalendarOutlined,
     ClearOutlined,
     DatabaseOutlined,
     DollarOutlined,
+    FilePdfOutlined,
     RiseOutlined,
     ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { router, usePage } from '@inertiajs/react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PanelLayout from '@/Layouts/PanelLayout';
 import PageHeader from '@/Components/PageHeader';
 import SectionCard from '@/Components/SectionCard';
 import EChart from '@/Components/Charts/EChart';
 import useTranslations from '@/hooks/useTranslations';
+import SalesReportsService from '@/Services/SalesReports';
 import formatMoney from '@/lib/money';
+import { buildEvolutionOption, buildPieOption, COLORS, DASH } from '@/lib/reportCharts';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
 const ROUTE = '/reportes/avance-ventas';
-
-/**
- * Colores de las series, alineados con la paleta del panel (ADR-006 §18: los
- * gráficos no introducen una paleta nueva). Azul = ventas, gris = compras,
- * naranja = margen. Es el orden de lectura que pide el ADR: el margen es la
- * cifra que el gerente quiere ver destacada, y por eso va en el color de acento.
- */
-const COLORS = {
-    sales: '#1B3A6B',
-    purchases: '#64748B',
-    margin: '#F47920',
-    axis: '#CBD5E1',
-    text: '#64748B',
-    ink: '#0F172A',
-};
-
-/** Paleta de la torta: derivados del azul y naranja de marca, en degradado. */
-const PRODUCT_COLORS = [
-    '#1B3A6B',
-    '#F47920',
-    '#3F6BA8',
-    '#F6A868',
-    '#6E93C4',
-    '#C2410C',
-    '#9BB8DC',
-    '#FBBF8A',
-];
-
-/** Un guion largo donde no hay dato; nunca "S/ 0.00" (ADR-017, decisión del usuario). */
-const DASH = '—';
 
 export default function SalesReport({ summary, daily, products, filters, months }) {
     const { t } = useTranslations();
@@ -106,158 +79,63 @@ export default function SalesReport({ summary, daily, products, filters, months 
         navigate({});
     };
 
-    // ── Gráfico de evolución (ADR-017 §7) ──────────────────────────────────
+    // ── Exportar PDF (ADR-018 §5) ───────────────────────────────────────────
     //
-    // Ventas y compras van a la izquierda y el margen a la derecha, en un
-    // segundo eje. No es un detalle cosmético: el margen es ~0.6 % del valor de
-    // las ventas, así que en un solo eje sus barras quedarían pegadas al cero y
-    // el gráfico no cumpliría su propósito de comparar.
-    const evolutionOption = useMemo(() => {
-        if (!daily?.length) {
-            return null;
-        }
-
-        const money = (value) => (value === null || value === undefined ? DASH : formatMoney(value));
-        const points = (key) => daily.map((row) => (row[key] === null ? null : row[key]));
-
-        return {
-            animationDuration: 400,
-            grid: { left: 8, right: 8, top: 48, bottom: 8, containLabel: true },
-            legend: { top: 8, data: [t('reports.series_sales'), t('reports.series_purchases'), t('reports.series_margin')] },
-            tooltip: {
-                trigger: 'axis',
-                axisPointer: { type: 'shadow' },
-                formatter: (params) => {
-                    if (!params?.length) {
-                        return '';
-                    }
-
-                    const day = dayjs(params[0].axisValue);
-                    const valueOf = (name) => params.find((item) => item.seriesName === name)?.value;
-
-                    const lines = [
-                        `<strong>${day.isValid() ? day.format('DD/MM/YYYY') : params[0].axisValue}</strong>`,
-                    ];
-
-                    [t('reports.series_sales'), t('reports.series_purchases'), t('reports.series_margin')].forEach(
-                        (label) => {
-                            lines.push(`${label}: <strong>${money(valueOf(label))}</strong>`);
-                        }
-                    );
-
-                    return lines.join('<br/>');
-                },
-            },
-            xAxis: {
-                type: 'category',
-                data: daily.map((row) => row.date),
-                axisLabel: {
-                    color: COLORS.text,
-                    formatter: (value) => (dayjs(value).isValid() ? dayjs(value).format('DD/MM') : value),
-                },
-                axisLine: { lineStyle: { color: COLORS.axis } },
-                axisTick: { show: false },
-            },
-            yAxis: [
-                {
-                    type: 'value',
-                    name: t('reports.axis_amount'),
-                    nameTextStyle: { color: COLORS.text },
-                    axisLabel: { color: COLORS.text },
-                    splitLine: { lineStyle: { color: COLORS.axis, type: 'dashed' } },
-                },
-                {
-                    type: 'value',
-                    name: t('reports.series_margin'),
-                    nameTextStyle: { color: COLORS.text },
-                    axisLabel: { color: COLORS.text },
-                    splitLine: { show: false },
-                },
-            ],
-            series: [
-                {
-                    name: t('reports.series_sales'),
-                    type: 'line',
-                    data: points('sales'),
-                    showSymbol: true,
-                    symbolSize: 6,
-                    itemStyle: { color: COLORS.sales },
-                    lineStyle: { color: COLORS.sales, width: 2 },
-                },
-                {
-                    name: t('reports.series_purchases'),
-                    type: 'line',
-                    data: points('purchases'),
-                    showSymbol: true,
-                    symbolSize: 6,
-                    itemStyle: { color: COLORS.purchases },
-                    lineStyle: { color: COLORS.purchases, width: 2 },
-                },
-                {
-                    name: t('reports.series_margin'),
-                    type: 'bar',
-                    yAxisIndex: 1,
-                    data: points('margin'),
-                    barMaxWidth: 22,
-                    itemStyle: { color: COLORS.margin, borderRadius: [3, 3, 0, 0] },
-                },
-            ],
-        };
-    }, [daily, t]);
-
-    // ── Torta de galones por producto (ADR-017 §8/§9/§10) ─────────────────
+    // El botón usa SIEMPRE los filtros que el backend está mostrando, no el
+    // borrador de los controles: así el PDF contiene exactamente el período
+    // que el usuario está viendo, incluso si dejó un rango a medio escribir
+    // (ADR-018 §5 "El PDF debe contener exactamente ese período").
     //
-    // La selección de productos es la legend nativa de ECharts: el usuario
-    // hace clic en la leyenda y la porción desaparece. No se toca el arreglo
-    // que llegó de Laravel ni se vuelve a consultar al backend, así que el
-    // detalle diario y los cards no cambian (ADR-017 §9).
-    const pieOption = useMemo(() => {
-        if (!products?.length) {
-            return null;
+    // La descarga va por fetch+blob y no por un <a href> para poder cumplir
+    // ADR-018 §21: si Chromium falla, el backend devuelve un error y aquí se
+    // muestra el mensaje amigable en lugar de una descarga corrupta.
+    const [exporting, setExporting] = useState(false);
+
+    const exportPdf = useCallback(async () => {
+        setExporting(true);
+
+        try {
+            const { fileName, blob } = await SalesReportsService.exportPdf(filters);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch {
+            message.error(t('reports.pdf_error'));
+        } finally {
+            setExporting(false);
         }
+    }, [filters, t]);
 
-        const total = products.reduce((acc, product) => acc + (product.total_gallons || 0), 0);
+    // ── Gráficos (ADR-017 §7/§8, ADR-018 §13/§15) ───────────────────────────
+    //
+    // Los `option` se arman con el módulo compartido `lib/reportCharts`, que es
+    // la misma fuente que consume el bundle standalone dentro del PDF: por
+    // construcción, web y PDF dibujan los mismos gráficos (ADR-018 §19).
+    const chartLabels = useMemo(
+        () => ({
+            seriesSales: t('reports.series_sales'),
+            seriesPurchases: t('reports.series_purchases'),
+            seriesMargin: t('reports.series_margin'),
+            axisAmount: t('reports.axis_amount'),
+            pieTooltipGallons: t('reports.pie_tooltip_gallons'),
+            pieTooltipShare: t('reports.pie_tooltip_share'),
+            noData: t('reports.no_data'),
+        }),
+        [t],
+    );
 
-        return {
-            animationDuration: 400,
-            legend: { type: 'scroll', bottom: 0, icon: 'circle' },
-            tooltip: {
-                trigger: 'item',
-                formatter: (params) => {
-                    const value = Number(params.value || 0);
-                    // El porcentaje se recalcula sobre lo que está visible: si un
-                    // producto está oculto, el resto suma 100% entre sí.
-                    const share = total > 0 ? (value / total) * 100 : 0;
+    const evolutionOption = useMemo(
+        () => buildEvolutionOption(daily, chartLabels),
+        [daily, chartLabels],
+    );
 
-                    return [
-                        `<strong>${params.name}</strong>`,
-                        `${t('reports.pie_tooltip_gallons')}: <strong>${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 2 })}</strong>`,
-                        `${t('reports.pie_tooltip_share')}: <strong>${share.toFixed(1)}%</strong>`,
-                    ].join('<br/>');
-                },
-            },
-            series: [
-                {
-                    type: 'pie',
-                    radius: ['45%', '68%'],
-                    center: ['50%', '46%'],
-                    avoidLabelOverlap: true,
-                    label: {
-                        formatter: '{b}\n{d}%',
-                        color: COLORS.text,
-                        lineHeight: 16,
-                    },
-                    labelLine: { length: 12, length2: 10, lineStyle: { color: COLORS.axis } },
-                    itemStyle: { borderColor: '#FFFFFF', borderWidth: 2 },
-                    data: products.map((product, index) => ({
-                        name: product.name || `${t('reports.no_data')} #${product.id}`,
-                        value: product.total_gallons || 0,
-                        itemStyle: { color: PRODUCT_COLORS[index % PRODUCT_COLORS.length] },
-                    })),
-                },
-            ],
-        };
-    }, [products, t]);
+    const pieOption = useMemo(() => buildPieOption(products, chartLabels), [products, chartLabels]);
 
     // ── Tabla "Resumen por día" (ADR-017 §11) ─────────────────────────────
     const gallons = (value) =>
@@ -354,6 +232,16 @@ export default function SalesReport({ summary, daily, products, filters, months 
                 title={t('reports.title')}
                 description={t('reports.description')}
                 headTitle={t('reports.title')}
+                extra={
+                    <Button
+                        icon={<FilePdfOutlined />}
+                        onClick={exportPdf}
+                        loading={exporting}
+                        disabled={loading}
+                    >
+                        {t('reports.pdf_export')}
+                    </Button>
+                }
             />
 
             {errors && Object.keys(errors).length > 0 ? (

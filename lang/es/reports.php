@@ -98,4 +98,21 @@ return [
     'invalid_month' => 'El mes seleccionado no es válido.',
     'invalid_date' => 'La fecha no es válida.',
     'invalid_range' => 'La fecha "Desde" no puede ser posterior a la fecha "Hasta".',
+
+    // ─── Exportación a PDF (ADR-018) ─────────────────────────────────────────
+
+    'pdf_export' => 'Exportar PDF',
+
+    // `:count` singular/plural. Va también en el encabezado del PDF, para que
+    // el archivo impreso se lea solo aunque se comparta suelto.
+    'orders_count' => ':count pedido(s) en el período',
+
+    // Mensaje de error al generar el PDF (ADR-018 §21). Genérico a propósito: el
+    // detalle técnico (Chromium, Puppeteer, rutas) va al log, no al usuario.
+    'pdf_error' => 'No se pudo generar el PDF. Inténtalo de nuevo o contacta al administrador.',
+
+    'pdf_brand' => 'Avance de ventas',
+    'pdf_generated_at' => 'Generado el :date a las :time',
+    'pdf_footer_page' => 'Página :page de :total',
+    'pdf_source' => 'Fuente: sistema Sertoco',
 ];

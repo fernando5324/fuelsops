@@ -112,8 +112,11 @@ Route::middleware('auth')->group(function () {
 
     // Reportes (ADR-017). Vista única: la agregación completa (cards, evolución
     // diaria y productos) llega en una sola respuesta Inertia, sin API aparte.
+    // La exportación a PDF (ADR-018) reutiliza los mismos filtros y el mismo
+    // servicio: sigue el verbo `exportar` del export de precios.
     Route::prefix('reportes')->name('reports.')->group(function () {
         Route::get('avance-ventas', [SalesReportController::class, 'index'])->name('sales.index');
+        Route::get('avance-ventas/exportar', [SalesReportController::class, 'export'])->name('sales.export');
     });
 
     // Perfil
