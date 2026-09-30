@@ -69,14 +69,23 @@ RUN docker-php-ext-configure gd \
 # ------------------------------------------------------------
 # Apache
 # ------------------------------------------------------------
-RUN a2dismod mpm_event mpm_worker \
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+
+RUN rm -f \
+        /etc/apache2/mods-enabled/mpm_event.conf \
+        /etc/apache2/mods-enabled/mpm_event.load \
+        /etc/apache2/mods-enabled/mpm_worker.conf \
+        /etc/apache2/mods-enabled/mpm_worker.load \
+        /etc/apache2/mods-enabled/mpm_prefork.conf \
+        /etc/apache2/mods-enabled/mpm_prefork.load \
     && a2enmod mpm_prefork \
     && a2enmod rewrite \
     && sed -ri \
         -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-        /etc/apache2/sites-available/*.conf \
-        /etc/apache2/apache2.conf \
-        /etc/apache2/conf-available/*.conf
+        /etc/apache2/sites-available/000-default.conf
+
+RUN ls -la /etc/apache2/mods-enabled/ | grep mpm
+RUN apache2ctl -M | grep mpm
 
 # ------------------------------------------------------------
 # Composer
