@@ -69,6 +69,8 @@ RUN docker-php-ext-configure gd \
 # ------------------------------------------------------------
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
+ARG APACHE_BUILD_VERSION=2
+
 RUN rm -f \
         /etc/apache2/mods-enabled/mpm_event.conf \
         /etc/apache2/mods-enabled/mpm_event.load \
@@ -155,4 +157,4 @@ EXPOSE 80
 # ------------------------------------------------------------
 # Start Apache
 # ------------------------------------------------------------
-CMD ["bash", "-c", "echo '=== MPM FILES ==='; find /etc/apache2 -type f -o -type l | sort | xargs grep -Hn 'LoadModule.*mpm_' 2>/dev/null; echo '=== ENABLED ==='; ls -la /etc/apache2/mods-enabled/ | grep mpm; echo '=== APACHE CONFIG ==='; apache2ctl -t"]
+CMD ["apache2-foreground"]
