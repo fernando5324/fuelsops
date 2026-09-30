@@ -27,8 +27,6 @@ FROM php:8.3-apache
 
 WORKDIR /var/www/html
 
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-
 
 # ------------------------------------------------------------
 # System dependencies
@@ -84,8 +82,6 @@ RUN rm -f \
         -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
         /etc/apache2/sites-available/000-default.conf
 
-RUN ls -la /etc/apache2/mods-enabled/ | grep mpm
-RUN apache2ctl -M | grep mpm
 
 # ------------------------------------------------------------
 # Composer
@@ -111,7 +107,8 @@ RUN composer install \
 # ------------------------------------------------------------
 COPY . .
 
-
+RUN ls -la /etc/apache2/mods-enabled/ | grep mpm \
+    && apache2ctl -M | grep mpm
 # ------------------------------------------------------------
 # Frontend assets
 # ------------------------------------------------------------
