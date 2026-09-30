@@ -151,3 +151,5 @@ EXPOSE 80
 # Start Apache
 # ------------------------------------------------------------
 CMD ["apache2ctl", "-D", "FOREGROUND"]
+
+#CMD ["apache2-foreground"]
