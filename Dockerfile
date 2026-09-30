@@ -74,7 +74,9 @@ RUN a2dismod mpm_event mpm_worker \
     && a2enmod rewrite \
     && sed -ri \
         -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-        /etc/apache2/sites-available/000-default.conf
+        /etc/apache2/sites-available/*.conf \
+        /etc/apache2/apache2.conf \
+        /etc/apache2/conf-available/*.conf
 
 # ------------------------------------------------------------
 # Composer
