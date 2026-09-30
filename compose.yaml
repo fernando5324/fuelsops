@@ -5,13 +5,13 @@ services:
       context: .
       dockerfile: Dockerfile
 
-    container_name: sertoco-app
+    container_name: fuelsops-app
 
     ports:
       - "8080:80"
 
     environment:
-      APP_NAME: Sertoco
+      APP_NAME: fuelsops
       APP_ENV: local
       APP_DEBUG: "true"
       APP_URL: http://localhost:8080
@@ -19,9 +19,9 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_DATABASE: sertoco
-      DB_USERNAME: sertoco
-      DB_PASSWORD: sertoco
+      DB_DATABASE: fuelsops
+      DB_USERNAME: fuelsops
+      DB_PASSWORD: fuelsops
 
     depends_on:
       mysql:
@@ -36,19 +36,19 @@ services:
   mysql:
     image: mysql:8.4
 
-    container_name: sertoco-mysql
+    container_name: fuelsops-mysql
 
     environment:
-      MYSQL_DATABASE: sertoco
-      MYSQL_USER: sertoco
-      MYSQL_PASSWORD: sertoco
+      MYSQL_DATABASE: fuelsops
+      MYSQL_USER: fuelsops
+      MYSQL_PASSWORD: fuelsops
       MYSQL_ROOT_PASSWORD: root
 
     ports:
       - "3307:3306"
 
     volumes:
-      - sertoco_mysql_data:/var/lib/mysql
+      - fuelsops_mysql_data:/var/lib/mysql
 
     healthcheck:
       test:
@@ -69,4 +69,4 @@ services:
 
 
 volumes:
-  sertoco_mysql_data:
+  fuelsops_mysql_data:
