@@ -69,15 +69,7 @@ RUN docker-php-ext-configure gd \
 # ------------------------------------------------------------
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-ARG APACHE_BUILD_VERSION=2
-
-RUN rm -f \
-        /etc/apache2/mods-enabled/mpm_event.conf \
-        /etc/apache2/mods-enabled/mpm_event.load \
-        /etc/apache2/mods-enabled/mpm_worker.conf \
-        /etc/apache2/mods-enabled/mpm_worker.load \
-        /etc/apache2/mods-enabled/mpm_prefork.conf \
-        /etc/apache2/mods-enabled/mpm_prefork.load \
+RUN a2dismod mpm_event mpm_worker || true \
     && a2enmod mpm_prefork \
     && a2enmod rewrite \
     && sed -ri \
@@ -158,4 +150,4 @@ EXPOSE 80
 # ------------------------------------------------------------
 # Start Apache
 # ------------------------------------------------------------
-CMD ["bash", "-c", "echo '=== BUILD MARKER ==='; cat /etc/fuelsops-build; echo '=== MPM ==='; ls -la /etc/apache2/mods-enabled/ | grep mpm; echo '=== APACHE ==='; apache2ctl -t"]
+CMD ["apache2ctl", "-D", "FOREGROUND"]
