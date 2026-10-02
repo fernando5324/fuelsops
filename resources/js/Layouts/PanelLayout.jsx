@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Layout, Menu, Dropdown, Space, Avatar, theme } from 'antd';
+import { Layout, Menu, Dropdown, Space, Avatar, theme, Button, Drawer, Grid } from 'antd';
 import {
     DashboardOutlined,
     FileTextOutlined,
@@ -15,10 +15,9 @@ import {
     TruckOutlined,
     CarOutlined,
     HomeOutlined,
-    TagsOutlined,
-    TagOutlined,
     MoneyCollectOutlined,
     BarChartOutlined,
+    MenuOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
 import { useBrand } from '@/lib/brand';
@@ -35,7 +34,6 @@ function iconFor(index) {
         5: IdcardOutlined,
         6: TruckOutlined,
         7: CarOutlined,
-        8: TagsOutlined,
     };
 
     const Icon = icons[index] || AppstoreOutlined;
@@ -52,6 +50,10 @@ export default function PanelLayout({ children }) {
     const {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
+
+    const screens = Grid.useBreakpoint();
+    const isMobile = screens.lg === false;
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
     const catalogLinks = [
         { key: 'asesores', label: <Link href="/catalogos/asesores">{t('menus.advisors')}</Link>, icon: iconFor(0) },
@@ -151,43 +153,51 @@ export default function PanelLayout({ children }) {
         ],
     };
 
+    // El mismo menú vive en el Sider (escritorio) y en el Drawer (móvil):
+    // compartir las props mantiene selección y submenús abiertos sincronizados.
+    const menuProps = {
+        theme: 'dark',
+        mode: 'inline',
+        selectedKeys: [selectedKey],
+        openKeys,
+        onOpenChange: setOpenKeys,
+        items,
+    };
+
+    // Marca del cliente en chip blanco sobre el sidebar oscuro (ver .ui-sidebar-brand).
+    const brandBlock = (
+        <div className="ui-sidebar-brand">
+            <img src={brand.logo} alt={brand.client} />
+        </div>
+    );
+
     return (
         <Layout style={{ minHeight: '100vh' }}>
-            <Sider breakpoint="lg" collapsedWidth="64">
-                <div
-                    style={{
-                        height: 48,
-                        margin: 16,
-                        color: '#fff',
-                        fontWeight: 700,
-                        fontSize: 18,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                    }}
-                >
-                    <TagOutlined />
-                    {brand.client}
-                </div>
-                <Menu
-                    theme="dark"
-                    mode="inline"
-                    selectedKeys={[selectedKey]}
-                    openKeys={openKeys}
-                    onOpenChange={setOpenKeys}
-                    items={items}
-                />
-            </Sider>
+            {!isMobile && (
+                <Sider breakpoint="lg" collapsedWidth="64">
+                    {brandBlock}
+                    <Menu {...menuProps} />
+                </Sider>
+            )}
             <Layout>
                 <Header
                     style={{
                         background: colorBgContainer,
-                        paddingInline: 24,
+                        paddingInline: isMobile ? 12 : 24,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'flex-end',
                     }}
                 >
+                    {isMobile && (
+                        <Button
+                            type="text"
+                            icon={<MenuOutlined />}
+                            aria-label={t('menus.open_menu')}
+                            onClick={() => setDrawerOpen(true)}
+                            style={{ fontSize: 18 }}
+                        />
+                    )}
+                    <span style={{ flex: 1 }} />
                     <Dropdown menu={userMenu} placement="bottomRight" trigger={['click']}>
                         <Space style={{ cursor: 'pointer' }}>
                             <Avatar icon={<UserOutlined />} />
@@ -195,7 +205,7 @@ export default function PanelLayout({ children }) {
                         </Space>
                     </Dropdown>
                 </Header>
-                <Content style={{ margin: 24 }}>
+                <Content className="ui-main-content">
                     <div
                         className="ui-panel-content"
                         style={{
@@ -209,6 +219,20 @@ export default function PanelLayout({ children }) {
                     </div>
                 </Content>
             </Layout>
+
+            {isMobile && (
+                <Drawer
+                    className="ui-menu-drawer"
+                    placement="left"
+                    size={280}
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    closable={false}
+                >
+                    {brandBlock}
+                    <Menu {...menuProps} onClick={() => setDrawerOpen(false)} />
+                </Drawer>
+            )}
         </Layout>
     );
 }

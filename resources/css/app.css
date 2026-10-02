@@ -104,12 +104,18 @@ body {
 
 /* --- ADR-006: tarjetas de sección (SectionCard) --- */
 .ui-card-gap {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.ui-section-card {
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 .ui-section-card .ant-card-head {
     padding-top: 18px;
     padding-bottom: 10px;
+    border-radius: 14px 14px 0 0;
 }
 
 .ui-section-card .ant-card-body {
@@ -494,6 +500,26 @@ body {
     max-width: calc(100% - 24px);
     width: auto;
     object-fit: contain;
+}
+
+/* --- Panel: margen del contenido (responsive) --- */
+.ui-main-content {
+    margin: 24px;
+}
+
+/* Menú responsive (móvil): el drawer se ve igual que el Sider de escritorio
+   (fondo oscuro de antd #001529, sin padding alrededor del menú). El color se
+   repite a propósito: es el oscuro inherente del Sider de antd, no un color
+   de la paleta del cliente. */
+.ui-menu-drawer .ant-drawer-body {
+    padding: 0;
+    background: #001529;
+}
+
+@media (max-width: 991px) {
+    .ui-main-content {
+        margin: 10px 12px 24px;
+    }
 }
 
 /* --- Panel: anchos de filtros (consistencia responsive) --- */

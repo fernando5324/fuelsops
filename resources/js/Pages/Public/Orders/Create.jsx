@@ -710,14 +710,14 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                     <SectionCard title={t('order.summary')} description={t('order.summary_help')}>
                         <div className="ui-summary">
                             <div className="ui-summary-item">
-                                <Text className="ui-summary-label">{t('order.total_gallons')}</Text>
+                                <Text className="ui-summary-label">⛽ {t('order.total_gallons')}</Text>
                                 <div className="ui-summary-value ui-summary-value--info">
                                     {`${formatGallons(totals.gallons)} gal`}
                                 </div>
                                 <Text className="ui-summary-hint">{t('order.summary_gallons_hint')}</Text>
                             </div>
                             <div className="ui-summary-item">
-                                <Text className="ui-summary-label">{t('order.total_sale')}</Text>
+                                <Text className="ui-summary-label">💵 {t('order.total_sale')}</Text>
                                 <div className="ui-summary-value ui-summary-value--money">
                                     {formatMoney(totals.sale)}
                                 </div>

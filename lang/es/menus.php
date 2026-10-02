@@ -21,4 +21,5 @@ return [
     'reports' => 'Reportes',
     'sales_report' => 'Avance de ventas',
     'quick_access' => 'Accesos rápidos',
+    'open_menu' => 'Abrir menú',
 ];
