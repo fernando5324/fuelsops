@@ -37,13 +37,20 @@ export const SalesReports = {
         },
     },
 
-    /**
+/**
      * Descarga el PDF del período indicado.
      *
      * Va por fetch+blob y no por un `<a href>` porque ADR-018 §21 exige que un
      * fallo de generación (Chromium caído, falta de Chromium) llegue al usuario
      * como mensaje amigable: con una navegación el navegador se quedaría en la
      * página de error y el usuario no sabría qué pasó.
+     *
+     * Con `responseType: 'blob'` un 422 o un 500 NO llegan como error de axios:
+     * se resuelven con `response.data` siendo un Blob que en realidad contiene
+     * JSON o texto plano. Sin desarmarlo, la página acabaría guardando un
+     * archivo llamado `avance-ventas.pdf` lleno de un mensaje de error. Por eso
+     * se comprueba el `Content-Type` y, si no es PDF, se lee el cuerpo y se
+     * lanza el mensaje real.
      *
      * @returns {Promise<{blob: Blob, fileName: string}>}
      */
@@ -52,13 +59,45 @@ export const SalesReports = {
             responseType: 'blob',
         });
 
+        const contentType = response.headers?.['content-type'] || '';
+
+        if (! contentType.includes('application/pdf')) {
+            throw new Error(await SalesReports.readError(response.data));
+        }
+
         const disposition = response.headers?.['content-disposition'] || '';
-        const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+        const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i);
 
         return {
             blob: response.data,
             fileName: match ? decodeURIComponent(match[1]) : 'avance-ventas.pdf',
         };
+    },
+
+    /**
+     * Saca el mensaje de error de una respuesta que llegó como `blob`.
+     *
+     * @returns {Promise<string>} El `message` del backend si lo hay; si no, el
+     *   texto plano tal cual (así el 500 de Chromium sigue siendo visible).
+     */
+    readError: async (blob) => {
+        try {
+            const text = await blob.text();
+
+            try {
+                const parsed = JSON.parse(text);
+
+                if (parsed?.message) {
+                    return parsed.message;
+                }
+            } catch {
+                // No era JSON: se devuelve el texto plano.
+            }
+
+            return text.trim();
+        } catch {
+            return '';
+        }
     },
 };
 

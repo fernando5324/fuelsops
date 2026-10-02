@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use App\Services\BrandService;
 use Illuminate\Support\Facades\Blade;
 use RuntimeException;
 use Spatie\Browsershot\Browsershot;
@@ -78,13 +79,22 @@ class SalesReportPdfService
     /**
      * Nombre del archivo (ADR-018 §20).
      *
-     * Sigue la convención del export de precios (`sertoco_{asunto}_{fecha}`) y
+     * Sigue la convención del export de precios (`{prefijo}_{asunto}_{fecha}`) y
      * además incluye el período, que es lo que hace único al archivo: el reporte
      * se puede volver a pedir las veces que haga falta y los PDF no se pisan.
+     *
+     * El prefijo es el del cliente (`BrandService::filePrefix()`, hoy
+     * `sertoco`), de modo que cada organización recibe sus archivos con su
+     * nombre y no se pisan entre sí.
      */
     public function fileName(array $period): string
     {
-        return sprintf('sertoco_avance_ventas_%s_%s.pdf', $period['from'], $period['to']);
+        return sprintf(
+            '%s_avance_ventas_%s_%s.pdf',
+            app(BrandService::class)->filePrefix(),
+            $period['from'],
+            $period['to'],
+        );
     }
 
     /**
@@ -102,6 +112,10 @@ class SalesReportPdfService
             'products' => $report['products'] ?? [],
             'period' => $period,
             'tenantName' => $tenantName,
+            // Paleta y convenciones resueltas (ADR-019): la vista no declara
+            // ningún hexadecimal, los recibe de BrandService.
+            'colors' => app(BrandService::class)->colors(),
+            'format' => app(BrandService::class)->format(),
             'logo' => $this->logoDataUri(),
             'chartsRuntime' => $this->chartsRuntime(),
             'labels' => $this->chartLabels(),
@@ -121,7 +135,7 @@ class SalesReportPdfService
      */
     private function browser(string $html): Browsershot
     {
-        $chromePath = config('sertoco.browsershot.chrome_path');
+        $chromePath = config('platform.browsershot.chrome_path');
 
         $browser = Browsershot::html($html)
             ->format('A4')
@@ -140,6 +154,27 @@ class SalesReportPdfService
         // arma queda vacío y Chromium no encuentra el paquete `puppeteer`.
         $browser->setNodeModulePath(base_path('node_modules'));
 
+        // ── Chromium en un servidor sin escritorio ──────────────────────────
+        //
+        // En desarrollo, Apache corre como servicio de Windows (`LocalSystem`,
+        // sesión 0): Chromium no tiene perfil de usuario en esa sesión y aborta
+        // con `Failed to launch the browser process: Code: 1002`. No es un
+        // problema del reporte ni del HTML; es Chromium sin escritorio. Por eso
+        // se le da un `user-data-dir` propio y escribible, dentro de `storage/`
+        // para no ensuciar el directorio del proyecto.
+        //
+        // Browsershot ya añade `--no-sandbox`; el resto es headless estándar,
+        // necesario también en contenedores sin GPU ni /dev/shm (ADR-018 §24).
+        $browser->setUserDataDir($this->userDataDir())
+            ->addChromiumArguments([
+                'disable-gpu',
+                'disable-dev-shm-usage',
+                'no-first-run',
+                'no-default-browser-check',
+                'disable-extensions',
+                'hide-scrollbars',
+            ]);
+
         if (is_string($chromePath) && $chromePath !== '') {
             $browser->setChromePath($chromePath);
         }
@@ -147,17 +182,65 @@ class SalesReportPdfService
         return $browser;
     }
 
+    /**
+     * Perfil de Chromium para la generación headless.
+     *
+     * Es un directorio que SOLO guarda el perfil que Chromium necesita para
+     * arrancar: nada del reporte ni de la aplicación (el HTML viaja aparte). Se
+     * crea si falta y se conserva entre ejecuciones, que es lo que hace el
+     * arranque más rápido.
+     */
+    private function userDataDir(): string
+    {
+        $dir = storage_path('app/browsershot/profile');
+
+        if (! is_dir($dir)) {
+            // `mkdir` recursivo: el primer arranque tras un `optimize:clear` puede
+            // no tener `app/` todavía.
+            @mkdir($dir, 0777, true);
+        }
+
+        if (! is_dir($dir)) {
+            throw new RuntimeException(
+                "No se pudo crear el directorio de perfil de Chromium en {$dir}. "
+                .'Verificá que storage/app/ sea escribible por el usuario del servidor web.'
+            );
+        }
+
+        return $dir;
+    }
+
+    /**
+     * Pie de página del PDF (ADR-018 §10, ADR-019 §colores).
+     *
+     * Chromium NO aplica hoja de estilo al pie: hay que escribir el HTML con
+     * estilos en línea sí o sí. El tamaño en px es el que espera Chromium, no
+     * el de la página (el margen está en pulgadas).
+     *
+     * El texto sale de `lang/es/reports.php` (las claves `pdf_source` y
+     * `pdf_footer_page` estaban definidas y sin usar) y el color del texto
+     * viene de la paleta del cliente, no de un hexadecimal en este archivo.
+     */
     private function footerTemplate(): string
     {
-        // Chromium no aplica hoja de estilo al pie: hay que escribir el HTML con
-        // estilos en línea sí o sí. El tamaño en px es el que espera Chromium,
-        // no el de la página (el margen está en pulgadas).
-        return <<<'HTML'
-            <div style="width:100%;font-family:Helvetica,Arial,sans-serif;font-size:9px;color:#64748B;padding:0 12mm;display:flex;justify-content:space-between;">
-                <span>Sertoco &middot; Avance de ventas</span>
-                <span>P&aacute;gina <span class="pageNumber"></span> de <span class="totalPages"></span></span>
-            </div>
-            HTML;
+        $brand = app(BrandService::class);
+
+        $source = str_replace(
+            [':client', ':report'],
+            [$brand->clientName(), __('reports.title')],
+            __('reports.pdf_source'),
+        );
+
+        return sprintf(
+            '<div style="width:100%%;font-family:Helvetica,Arial,sans-serif;font-size:9px;color:%s;padding:0 12mm;display:flex;justify-content:space-between;">'
+            .'<span>%s</span>'
+            .'<span>%s <span class="pageNumber"></span> %s <span class="totalPages"></span></span>'
+            .'</div>',
+            $brand->color('muted'),
+            e($source),
+            e(__('reports.pdf_footer_page')),
+            e(__('reports.pdf_footer_of')),
+        );
     }
 
     /**

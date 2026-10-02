@@ -23,13 +23,17 @@
         {{-- Pila de fuentes del SISTEMA, no la de Bunny Fonts que usa
              app.blade.php: una fuente descargada por CDN haría la impresión
              dependiente de la red y no determinista. --}}
+        {{-- Paleta del cliente resuelta por `SalesReportPdfService` desde
+             config/brand.php + tenants.details (ADR-019): aquí no se declara
+             ningún hexadecimal. --}}
         :root {
-            --navy: #1B3A6B;
-            --accent: #F47920;
-            --ink: #0F172A;
-            --muted: #64748B;
-            --line: #CBD5E1;
-            --soft: #F1F5F9;
+            --navy: {{ $colors['primary'] }};
+            --accent: {{ $colors['accent'] }};
+            --ink: {{ $colors['ink'] }};
+            --muted: {{ $colors['muted'] }};
+            --line: {{ $colors['border'] }};
+            --line-soft: {{ $colors['border_soft'] }};
+            --soft: {{ $colors['fill_soft'] }};
         }
 
         @page {
@@ -172,7 +176,7 @@
         th:first-child, td:first-child { text-align: left; }
 
         td {
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--line-soft);
             padding: 6px;
             text-align: right;
             white-space: nowrap;
@@ -243,9 +247,12 @@
                 // `—` donde no hay dato. Nunca "S/ 0.00": un guion largo dice la
                 // verdad sobre un precio o margen que no existe (ADR-013/ADR-017).
                 $dash = '—';
-                $money = fn ($value) => $value === null || $value === undefined
+                // El símbolo de moneda viene de `$format` (config/brand.php),
+                // no de un literal 'S/' repetido en la vista.
+                $symbol = $format['symbol'] ?? 'S/';
+                $money = fn ($value) => $value === null
                     ? $dash
-                    : 'S/ ' . number_format((float) $value, 2, '.', ',');
+                    : $symbol . ' ' . number_format((float) $value, 2, '.', ',');
             @endphp
 
             <div class="card-cell">
@@ -274,7 +281,7 @@
                     <div class="card-label">
                         {{ __('reports.total_margin') }}
                         @if (($summary['margin_per_gallon'] ?? null) !== null)
-                            · S/ {{ number_format((float) $summary['margin_per_gallon'], 2, '.', ',') }}/{{ __('reports.unit_gallons') }}
+                            · {{ $symbol }} {{ number_format((float) $summary['margin_per_gallon'], 2, '.', ',') }}/{{ __('reports.unit_gallons') }}
                         @endif
                     </div>
                     <div class="card-value accent {{ ($summary['total_margin'] ?? null) === null ? 'dash' : '' }}">{{ $money($summary['total_margin'] ?? null) }}</div>
@@ -329,7 +336,7 @@
                                 <td class="{{ ($row['purchases'] ?? null) === null ? 'dash' : '' }}">{{ $money($row['purchases'] ?? null) }}</td>
                                 <td>{{ $money($row['sales'] ?? null) }}</td>
                                 <td class="{{ ($row['margin'] ?? null) === null ? 'dash' : '' }}">{{ $money($row['margin'] ?? null) }}</td>
-                                <td class="{{ ($row['margin_per_gallon'] ?? null) === null ? 'dash' : '' }}">{{ ($row['margin_per_gallon'] ?? null) === null ? $dash : 'S/ ' . number_format((float) $row['margin_per_gallon'], 2, '.', ',') }}</td>
+                                <td class="{{ ($row['margin_per_gallon'] ?? null) === null ? 'dash' : '' }}">{{ ($row['margin_per_gallon'] ?? null) === null ? $dash : $symbol . ' ' . number_format((float) $row['margin_per_gallon'], 2, '.', ',') }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -342,7 +349,7 @@
                             <td class="{{ ($summary['total_purchases'] ?? null) === null ? 'dash' : '' }}">{{ $money($summary['total_purchases'] ?? null) }}</td>
                             <td>{{ $money($summary['total_sales'] ?? null) }}</td>
                             <td class="{{ ($summary['total_margin'] ?? null) === null ? 'dash' : '' }}">{{ $money($summary['total_margin'] ?? null) }}</td>
-                            <td class="{{ ($summary['margin_per_gallon'] ?? null) === null ? 'dash' : '' }}">{{ ($summary['margin_per_gallon'] ?? null) === null ? $dash : 'S/ ' . number_format((float) $summary['margin_per_gallon'], 2, '.', ',') }}</td>
+                            <td class="{{ ($summary['margin_per_gallon'] ?? null) === null ? 'dash' : '' }}">{{ ($summary['margin_per_gallon'] ?? null) === null ? $dash : $symbol . ' ' . number_format((float) $summary['margin_per_gallon'], 2, '.', ',') }}</td>
                         </tr>
                     </tfoot>
                 </table>

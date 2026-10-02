@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Platform\Reports;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SalesReportRequest;
-use App\Models\Tenant;
+use App\Services\BrandService;
 use App\Services\Reports\SalesReportPdfService;
 use App\Services\Reports\SalesReportService;
 use App\Services\TenantContext;
@@ -68,7 +68,9 @@ class SalesReportController extends Controller
     ): HttpResponse {
         $period = $request->period();
         $report = $reports->build($period['from'], $period['to']);
-        $tenantName = Tenant::find(TenantContext::id())?->name ?? config('app.name', 'Sertoco');
+        // Nombre del cliente (tenants.name), resuelto por BrandService para no
+        // repetir el fallback ni el hexaquí (ADR-019).
+        $tenantName = app(BrandService::class)->clientName();
 
         try {
             return $pdf->export($report, $period, $tenantName);

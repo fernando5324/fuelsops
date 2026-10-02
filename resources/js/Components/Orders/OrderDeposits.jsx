@@ -8,27 +8,13 @@ import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
-
-const BANKS = [
-    'BCP',
-    'BBVA',
-    'Interbank',
-    'Scotiabank',
-    'Bancoficial',
-    'Bancesud',
-    'Citibank',
-    'Credibank',
-    'Mibanco',
-    'Banco de la Nación',
-    'Caja Arequipa',
-    'Caja Piura',
-    'Cajamars',
-    'Other',
-];
+import { dateFormat, symbol } from '@/lib/format';
 
 export default function OrderDeposits({ order, supplierPayables, readOnly = false }) {
     const { modal } = App.useApp();
     const { t } = useTranslations();
+    // Los bancos vienen de `lang/es/banks.php` (ADR-019 §6).
+    const banks = t('banks.list') || [];
     const [form] = Form.useForm();
     const [open, setOpen] = useState(false);
 
@@ -266,7 +252,7 @@ export default function OrderDeposits({ order, supplierPayables, readOnly = fals
                     >
                         <DatePicker
                             style={{ width: '100%' }}
-                            format="DD/MM/YYYY"
+                            format={dateFormat()}
                             placeholder={t('order.deposit_date')}
                             disabledDate={(d) => d && d.isAfter(new Date(), 'day')}
                         />
@@ -277,7 +263,7 @@ export default function OrderDeposits({ order, supplierPayables, readOnly = fals
                         rules={[{ required: true, message: t('order.bank') }]}
                     >
                         <AutoComplete
-                            options={BANKS.map((b) => ({ value: b }))}
+                                        options={banks.map((b) => ({ value: b }))}
                             placeholder={t('order.bank')}
                             filterOption={(input, option) =>
                                 String(option?.value || '')
@@ -310,7 +296,7 @@ export default function OrderDeposits({ order, supplierPayables, readOnly = fals
                         <Input
                             placeholder="0.00"
                             inputMode="decimal"
-                            prefix="S/"
+                            prefix={symbol()}
                             maxLength={15}
                             onChange={(e) => {
                                 const cleaned = e.target.value.replace(/[^\d.]/g, '');

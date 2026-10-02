@@ -15,8 +15,8 @@ return [
     'preview_title' => 'Vista previa de la importación',
     'file' => 'Archivo',
     'uploaded_at' => 'Subido el',
-    'batch_status' => 'Estado',
-    'batch_pending' => 'Pendiente',
+    'batch_status' => __('common.status'),
+    'batch_pending' => __('common.pending'),
     'batch_cancelled' => 'Cancelada',
     'batch_completed' => 'Completada',
 
@@ -29,12 +29,12 @@ return [
 
     'items_title' => 'Detalle de filas',
     'col_row' => 'N.º',
-    'col_plant' => 'Planta',
-    'col_product' => 'Producto',
-    'col_wholesaler' => 'Mayorista',
+    'col_plant' => __('common.plant'),
+    'col_product' => __('common.product'),
+    'col_wholesaler' => __('common.wholesaler'),
     'col_previous' => 'Precio anterior',
     'col_new' => 'Precio nuevo',
-    'col_status' => 'Estado',
+    'col_status' => __('common.status'),
     'col_error' => 'Detalle',
 
     'status_new' => 'Nuevo',
@@ -138,7 +138,10 @@ return [
     'relation_deleted' => 'Relación eliminada correctamente.',
     'invalid_relation' => 'La planta o el producto indicados no son válidos.',
     'invalid_wholesaler' => 'Uno de los mayoristas indicados no es válido.',
-    'invalid_margin' => 'El margen debe ser un número mayor o igual a 0 (hasta 4 decimales).',
+    // El error de margen vive en `pricing.errors.invalid_margin` (es el código
+    // que guarda `price_import_items.error_message` y el que resuelve
+    // `__("pricing.errors.{$code}")`). Antes existía además una clave suelta
+    // `invalid_margin` aquí que nadie usaba y confundía: eliminada (ADR-019 §7).
 
     // ─────────────────────────────────────────────────────────────────────────
     // ADR-012: visualización de los cálculos (niveles 1-3 + fórmula)

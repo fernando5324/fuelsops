@@ -49,7 +49,7 @@ class PriceApiController extends Controller
         } catch (RuntimeException) {
             return response()->json([
                 'ok' => false,
-                'message' => __('pricing.no_active_configuration'),
+                'message' => __('pricing.errors.no_active_configuration'),
                 'result' => null,
             ]);
         }
@@ -96,7 +96,7 @@ class PriceApiController extends Controller
         try {
             $pricing->savePrices($plantProduct, $data['prices'], $data['margin'] ?? null);
         } catch (RuntimeException) {
-            return back()->with('flash', ['error' => __('pricing.no_active_configuration')]);
+            return back()->with('flash', ['error' => __('pricing.errors.no_active_configuration')]);
         }
 
         return $this->flashOk('pricing.updated_ok');
@@ -118,7 +118,7 @@ class PriceApiController extends Controller
                 $data['price'] ?? null,
             );
         } catch (RuntimeException) {
-            return back()->with('flash', ['error' => __('pricing.no_active_configuration')]);
+            return back()->with('flash', ['error' => __('pricing.errors.no_active_configuration')]);
         }
 
         return $this->flashOk('pricing.updated_ok');
@@ -136,7 +136,7 @@ class PriceApiController extends Controller
                 null,
             );
         } catch (RuntimeException) {
-            return back()->with('flash', ['error' => __('pricing.no_active_configuration')]);
+            return back()->with('flash', ['error' => __('pricing.errors.no_active_configuration')]);
         }
 
         return $this->flashOk('pricing.updated_ok');

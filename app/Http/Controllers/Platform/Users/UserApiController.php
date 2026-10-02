@@ -65,7 +65,7 @@ class UserApiController extends Controller
 
     public function destroy(Request $request): RedirectResponse
     {
-        if ((int) $this->resolveRouteEntity()->getKey() === (int) config('sertoco.system_user_id')) {
+        if ((int) $this->resolveRouteEntity()->getKey() === (int) config('platform.system_user_id')) {
             return back()
                 ->withErrors(['system_user' => __('catalogs.system_user_protected')]);
         }

@@ -15,8 +15,10 @@
 -- Organización principal (Sertoco)
 -- ---------------------------------------------------------------------------
 
-INSERT IGNORE INTO tenants (id, account_id, name, slug, legal_name, tax_id, email, phone, website, logo_media_file_id, status, created_by)
-VALUES (1, NULL, 'Sertoco', 'sertoco', 'Sertoco S.A.C.', '20560398630', 'contacto@sertoco.pe', NULL, NULL, NULL, 'active', 999999);
+INSERT IGNORE INTO tenants (id, account_id, name, slug, legal_name, tax_id, email, phone, website, logo_media_file_id, details, status, created_by)
+VALUES (1, NULL, 'Sertoco', 'sertoco', 'Sertoco S.A.C.', '20560398630', 'contacto@sertoco.pe', NULL, NULL, NULL,
+    '{"colors": {"primary": "#1B3A6B", "accent": "#F47920", "accent_hover": "#E06810", "bg": "#F8FAFC", "surface": "#FFFFFF", "border": "#CBD5E1", "border_soft": "#E2E8F0", "fill_soft": "#F1F5F9", "ink": "#0F172A", "muted": "#64748B", "success": "#10B981", "danger": "#EF4444"}}',
+    'active', 999999);
 
 -- ---------------------------------------------------------------------------
 -- Usuario principal del panel (dueño de la organización Sertoco)

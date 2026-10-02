@@ -45,6 +45,6 @@ trait Auditable
             return (int) $id;
         }
 
-        return (int) config('sertoco.system_user_id', 999999);
+        return (int) config('platform.system_user_id', 999999);
     }
 }

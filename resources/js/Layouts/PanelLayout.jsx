@@ -21,7 +21,7 @@ import {
     BarChartOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
-import logo from '../../images/logo.png';
+import { useBrand } from '@/lib/brand';
 
 const { Sider, Header, Content } = Layout;
 
@@ -44,8 +44,9 @@ function iconFor(index) {
 }
 
 export default function PanelLayout({ children }) {
-    const { auth, tenant } = usePage().props;
+    const { auth } = usePage().props;
     const user = auth?.user;
+    const brand = useBrand();
     const { t } = useTranslations();
     const path = window.location.pathname;
     const {
@@ -166,7 +167,7 @@ export default function PanelLayout({ children }) {
                     }}
                 >
                     <TagOutlined />
-                    {tenant?.name}
+                    {brand.client}
                 </div>
                 <Menu
                     theme="dark"

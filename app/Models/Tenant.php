@@ -11,7 +11,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Organización (tenant) que aísla la información del sistema.
  *
  * Cada usuario pertenece a una única organización y toda la información de
- * negocio se enruta por `tenant_id`. La organización principal es "Sertoco".
+ * negocio se enruta por `tenant_id`.
+ *
+ * `details` (JSON) es la customization del cliente (ADR-019): paleta y formato
+ * que sobrescriben los valores por defecto de `config/brand.php`. NULL = se
+ * usan los del archivo. Lo resuelve `App\Services\BrandService`.
+ *
+ * `name` es el nombre del cliente y es lo que muestra la plataforma (encabezado
+ * del menú y título del navegador); el nombre interno del producto es
+ * `config('brand.name')`.
  */
 class Tenant extends Model
 {
@@ -27,10 +35,12 @@ class Tenant extends Model
         'phone',
         'website',
         'logo_media_file_id',
+        'details',
         'status',
     ];
 
     protected $casts = [
+        'details' => 'array',
         'is_deleted' => 'boolean',
     ];
 

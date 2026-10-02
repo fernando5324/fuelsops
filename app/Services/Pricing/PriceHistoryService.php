@@ -45,7 +45,7 @@ class PriceHistoryService
             'calculation_version' => PriceCalculation::VERSION,
             'calculation_data' => $this->snapshot($plantProduct, $result, $config),
             'calculated_at' => now(),
-            'created_by' => $actorId ?? (Auth::id() ?? (int) config('sertoco.system_user_id', 999999)),
+            'created_by' => $actorId ?? (Auth::id() ?? (int) config('platform.system_user_id', 999999)),
         ]);
     }
 

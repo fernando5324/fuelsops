@@ -23,6 +23,7 @@ import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
+import { dateFormat, formatNumber } from '@/lib/format';
 import statusColor from '@/lib/status';
 import OrderPreview from '@/Components/Orders/OrderPreview';
 
@@ -140,9 +141,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
             align: 'right',
             width: 120,
             render: (v) =>
-                v === null || v === undefined
-                    ? '-'
-                    : Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2 }),
+                v === null || v === undefined ? '-' : formatNumber(v, 2),
         },
         {
             title: t('order.total_sale'),
@@ -236,7 +235,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
                         options={(advisors || []).map((a) => ({ value: a.id, label: a.name }))}
                     />
                     <RangePicker
-                        format="DD/MM/YYYY"
+                        format={dateFormat()}
                         className="ui-filter-range"
                         value={[range[0] ?? null, range[1] ?? null]}
                         onChange={(dates) => {

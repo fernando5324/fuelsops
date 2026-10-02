@@ -1,5 +1,7 @@
 import formatMoney from './money';
 import dayjs from 'dayjs';
+import { brandColors, FALLBACK_BRAND } from './brand';
+import { dateFormat, locale } from './format';
 
 /**
  * Builders de las opciones de Apache ECharts del reporte "Avance de ventas".
@@ -27,18 +29,18 @@ import dayjs from 'dayjs';
  * cifra que el gerente quiere ver destacada, y por eso va en el color de acento.
  */
 export const COLORS = {
-    sales: '#1B3A6B',
-    purchases: '#64748B',
-    margin: '#F47920',
-    axis: '#CBD5E1',
-    text: '#64748B',
-    ink: '#0F172A',
+    sales: brandColors().primary,
+    purchases: brandColors().muted,
+    margin: brandColors().accent,
+    axis: brandColors().border,
+    text: brandColors().muted,
+    ink: brandColors().ink,
 };
 
 /** Paleta de la torta: derivados del azul y naranja de marca, en degradado. */
 export const PRODUCT_COLORS = [
-    '#1B3A6B',
-    '#F47920',
+    brandColors().primary,
+    brandColors().accent,
     '#3F6BA8',
     '#F6A868',
     '#6E93C4',
@@ -88,7 +90,7 @@ export function buildEvolutionOption(daily, labels) {
                 const valueOf = (name) => params.find((item) => item.seriesName === name)?.value;
 
                 const lines = [
-                    `<strong>${day.isValid() ? day.format('DD/MM/YYYY') : params[0].axisValue}</strong>`,
+                    `<strong>${day.isValid() ? day.format(dateFormat()) : params[0].axisValue}</strong>`,
                 ];
 
                 series.forEach((label) => {
@@ -190,7 +192,7 @@ export function buildPieOption(products, labels) {
 
                 return [
                     `<strong>${params.name}</strong>`,
-                    `${labels.pieTooltipGallons}: <strong>${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 2 })}</strong>`,
+                    `${labels.pieTooltipGallons}: <strong>${Number(value).toLocaleString(locale(), { maximumFractionDigits: 2 })}</strong>`,
                     `${labels.pieTooltipShare}: <strong>${share.toFixed(1)}%</strong>`,
                 ].join('<br/>');
             },

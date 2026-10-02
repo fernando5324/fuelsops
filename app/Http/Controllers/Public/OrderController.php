@@ -109,7 +109,23 @@ class OrderController extends Controller
 
     public function confirmed(Order $order, OrderService $orders)
     {
-        $order->load(['customer', 'details', 'status']);
+        // Todo lo que la página de confirmación muestra debe venir cargado:
+        // sin eager loading las relaciones llegan como null y el front las
+        // pinta como "-" o vacías (asesor, conductor, vehículos, planta /
+        // mayorista / producto del detalle, compartimentos y adjuntos).
+        $order->load([
+            'advisor',
+            'customer',
+            'driver',
+            'tanker',
+            'tractor',
+            'status',
+            'details.plant',
+            'details.wholesaler',
+            'details.product',
+            'compartments.product',
+            'files',
+        ]);
 
         return Inertia::render('Public/Orders/Confirmed', [
             'order' => $order,

@@ -2,6 +2,7 @@ import { Tooltip } from 'antd';
 import SectionCard from '@/Components/SectionCard';
 import useTranslations from '@/hooks/useTranslations';
 import formatMoney from '@/lib/money';
+import { formatNumber, gallonUnit } from '@/lib/format';
 
 export default function OrderSummary({ totals, compact = false }) {
     const { t } = useTranslations();
@@ -17,8 +18,8 @@ export default function OrderSummary({ totals, compact = false }) {
                 <div className="ui-summary-item">
                     <span className="ui-summary-label">{t('order.total_gallons')}</span>
                     <span className="ui-summary-value ui-summary-value--info">
-                        {totalGallons.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                        <span className="ui-summary-unit"> gal</span>
+                        {formatNumber(totalGallons, 2)}
+                        <span className="ui-summary-unit">{gallonUnit()}</span>
                     </span>
                 </div>
                 <div className="ui-summary-item">

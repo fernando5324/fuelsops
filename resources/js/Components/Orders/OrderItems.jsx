@@ -2,9 +2,12 @@ import { Table, Tooltip, Typography } from 'antd';
 import SectionCard from '@/Components/SectionCard';
 import useTranslations from '@/hooks/useTranslations';
 import formatMoney from '@/lib/money';
+import { formatNumber } from '@/lib/format';
+import { useBrand } from '@/lib/brand';
 
 export default function OrderItems({ order, totals }) {
     const { t } = useTranslations();
+    const brand = useBrand();
     const details = order?.details || [];
 
     const columns = [
@@ -21,13 +24,13 @@ export default function OrderItems({ order, totals }) {
             title: t('order.gallons'),
             dataIndex: 'gallons',
             align: 'right',
-            render: (v) => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 }),
+            render: (v) => formatNumber(v || 0, 2),
         },
         {
             title: t('order.sale_price'),
             dataIndex: 'sale_price',
             align: 'right',
-            render: (v) => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 4 }),
+            render: (v) => formatNumber(v || 0, 4),
         },
         {
             title: t('order.purchase_price'),
@@ -70,7 +73,9 @@ export default function OrderItems({ order, totals }) {
                 v == null ? (
                     <span className="ui-order-empty">—</span>
                 ) : (
-                    <span style={{ fontWeight: 600, color: '#10B981' }}>{formatMoney(v)}</span>
+                    <span style={{ fontWeight: 600, color: brand.colors.success }}>
+                        {formatMoney(v)}
+                    </span>
                 ),
         },
         {
@@ -108,7 +113,7 @@ export default function OrderItems({ order, totals }) {
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={1} align="right">
                                 <Typography.Text strong>
-                                    {g.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                                    {formatNumber(g, 2)}
                                 </Typography.Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={2} colSpan={2} />

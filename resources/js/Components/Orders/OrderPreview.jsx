@@ -4,6 +4,7 @@ import useTranslations from '@/hooks/useTranslations';
 import formatDate from '@/lib/dates';
 import formatMoney from '@/lib/money';
 import statusColor from '@/lib/status';
+import { formatGallons, formatNumber } from '@/lib/format';
 
 export default function OrderPreview({ order, totals }) {
     const { t } = useTranslations();
@@ -34,7 +35,7 @@ export default function OrderPreview({ order, totals }) {
                 <div className="ui-summary-item">
                     <span className="ui-summary-label">{t('order.total_gallons')}</span>
                     <span className="ui-summary-value ui-summary-value--info">
-                        {totalGallons.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        {formatNumber(totalGallons, 2)}
                     </span>
                 </div>
                 <div className="ui-summary-item">
@@ -74,9 +75,7 @@ export default function OrderPreview({ order, totals }) {
                                 <div className="ui-order-preview-product-name">
                                     {d.product?.name || '-'}
                                     <Typography.Text className="ui-order-preview-product-qty">
-                                        {` · ${Number(d.gallons || 0).toLocaleString('es-ES', {
-                                            minimumFractionDigits: 2,
-                                        })} gal`}
+                                        {` · ${formatGallons(d.gallons, 2)}`}
                                     </Typography.Text>
                                 </div>
                                 <Typography.Text type="secondary" className="ui-order-preview-product-meta">

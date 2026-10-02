@@ -1,6 +1,7 @@
 import { Table, Typography } from 'antd';
 import SectionCard from '@/Components/SectionCard';
 import useTranslations from '@/hooks/useTranslations';
+import { formatNumber } from '@/lib/format';
 
 /**
  * Distribución por compartimentos en solo lectura (ADR-015). La edición vive en
@@ -40,10 +41,7 @@ export default function OrderCompartments({ order, readOnly = false }) {
             align: 'right',
             render: (v) => (
                 <span style={{ fontWeight: 600 }}>
-                    {Number(v || 0).toLocaleString('es-ES', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}
+                    {formatNumber(v || 0, 2)}
                 </span>
             ),
         },
@@ -72,10 +70,7 @@ export default function OrderCompartments({ order, readOnly = false }) {
                                   </Table.Summary.Cell>
                                   <Table.Summary.Cell index={1} align="right">
                                       <Typography.Text strong>
-                                          {total.toLocaleString('es-ES', {
-                                              minimumFractionDigits: 2,
-                                              maximumFractionDigits: 2,
-                                          })}
+                                          {formatNumber(total, 2)}
                                       </Typography.Text>
                                   </Table.Summary.Cell>
                               </Table.Summary.Row>

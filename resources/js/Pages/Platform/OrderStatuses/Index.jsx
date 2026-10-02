@@ -7,17 +7,31 @@ import PageHeader from '@/Components/PageHeader';
 import SubmitButton from '@/Components/SubmitButton';
 import { OrderStatuses } from '@/Services';
 import useTranslations from '@/hooks/useTranslations';
+import { useBrand } from '@/lib/brand';
 import formatDate from '@/lib/dates';
 
 const { Text } = Typography;
 
-const colorPresets = [
+/**
+ * Presets de color del ColorPicker (ADR-019).
+ *
+ * El primero es la marca del cliente y se construye con la paleta resuelta
+ * (`brand.colors`), así que sigue al `tenants.details` de cada cliente. El
+ * segundo es una paleta neutra de estados: son colores de semántica (verde =
+ * activo, rojo = error) y NO son marca, por eso siguen fijos aquí.
+ */
+const colorPresets = (brand) => [
     {
-        label: 'Sertoco',
-        colors: ['#1B3A6B', '#F47920', '#10B981', '#0F172A'],
+        label: brand.product,
+        colors: [
+            brand.colors.primary,
+            brand.colors.accent,
+            brand.colors.success,
+            brand.colors.ink,
+        ],
     },
     {
-        label: 'Estados',
+        label:"Estados", //Lo estoy fijando intencionalmente por ahora.
         colors: [
             '#E3B341',
             '#52C41A',
@@ -43,6 +57,7 @@ export default function OrderStatusesIndex({ config, rows, filter }) {
     const { message, modal } = App.useApp();
     const { flash, errors } = usePage().props;
     const { t } = useTranslations();
+    const brand = useBrand();
     const [form] = Form.useForm();
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -324,7 +339,7 @@ export default function OrderStatusesIndex({ config, rows, filter }) {
                         label={t('catalogs.color')}
                         getValueFromEvent={(color) => color?.toHexString()}
                     >
-                        <ColorPicker format="hex" showText presets={colorPresets} />
+                        <ColorPicker format="hex" showText presets={colorPresets(brand)} />
                     </Form.Item>
                     <Form.Item name="is_default" label={t('catalogs.is_default')} valuePropName="checked">
                         <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />

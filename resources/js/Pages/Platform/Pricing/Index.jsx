@@ -38,6 +38,8 @@ import PricesAdmin from '@/Services/PricesAdmin';
 import useTranslations from '@/hooks/useTranslations';
 import formatMoney from '@/lib/money';
 import formatDate from '@/lib/dates';
+import { useBrand } from '@/lib/brand';
+import { symbol } from '@/lib/format';
 
 const { Text, Title } = Typography;
 
@@ -77,6 +79,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
     const { message, modal } = App.useApp();
     const { flash, errors, auth } = usePage().props;
     const { t } = useTranslations();
+    const brand = useBrand();
 
     // Eliminar una relación es una baja lógica que conserva precios e
     // historial: se restringe al dueño, igual que la papelera de pedidos
@@ -387,7 +390,13 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
             const isBest = row.calc?.winner_wholesaler_id === w.value;
             return (
                 <Tooltip title={isBest ? t('pricing.best_price') : null}>
-                    <span style={isBest ? { fontWeight: 700, color: '#10B981' } : undefined}>
+                    <span
+                        style={
+                            isBest
+                                ? { fontWeight: 700, color: brand.colors.success }
+                                : undefined
+                        }
+                    >
                         {formatMoney(value, { digits: 4 })}
                     </span>
                 </Tooltip>
@@ -678,7 +687,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                             precision={4}
                             min={0}
                             step={0.01}
-                            prefix="S/"
+                            prefix={symbol()}
                             style={{ width: '100%' }}
                         />
                     </Form.Item>
@@ -697,7 +706,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                                 stringMode
                                 precision={4}
                                 min={0.0001}
-                                prefix="S/"
+                                prefix={symbol()}
                                 placeholder={t('pricing.no_price')}
                                 style={{ width: '100%' }}
                             />
@@ -874,7 +883,7 @@ export default function PricingIndex({ rows, wholesalers, plants, products, conf
                             precision={4}
                             min={0}
                             step={0.01}
-                            prefix="S/"
+                            prefix={symbol()}
                             style={{ width: '100%' }}
                         />
                     </Form.Item>

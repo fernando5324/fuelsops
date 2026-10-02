@@ -1,5 +1,5 @@
 import { Card, Typography } from 'antd';
-import { usePage } from '@inertiajs/react';
+import { useBrand } from '@/lib/brand';
 
 export default function AuthLayout({
     heading,
@@ -7,8 +7,10 @@ export default function AuthLayout({
     width = 400,
     children,
 }) {
-    const { tenant } = usePage().props;
-    const brand = heading ?? tenant?.name ?? 'Sertoco';
+    const brandConfig = useBrand();
+
+    // `heading` (p. ej. "Iniciar sesión") manda; si no, el nombre del cliente.
+    const brand = heading ?? brandConfig.client;
 
     return (
         <div

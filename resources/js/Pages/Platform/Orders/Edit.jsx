@@ -32,6 +32,7 @@ import SubmitButton from '@/Components/SubmitButton';
 import Orders from '@/Services/Orders';
 import useTranslations from '@/hooks/useTranslations';
 import formatMoney from '@/lib/money';
+import { dateFormat, formatNumber, symbol } from '@/lib/format';
 
 const { Dragger } = Upload;
 const { Text } = Typography;
@@ -47,11 +48,7 @@ const fieldFromError = (key) => {
 
 const normFile = (e) => (Array.isArray(e) ? e : e?.fileList || []);
 
-const formatGallons = (value) =>
-    Number(value || 0).toLocaleString('es-ES', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+const formatGallons = (value) => formatNumber(value, 2);
 
 function DocumentRow({ file, removed, onToggle }) {
     const { t } = useTranslations();
@@ -384,7 +381,7 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                 label={t('order.order_date')}
                                 rules={[{ required: true, message: `${t('order.order_date')} ${t('common.required')}` }]}
                             >
-                                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                                <DatePicker style={{ width: '100%' }} format={dateFormat()} />
                             </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
@@ -548,7 +545,7 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                         <span>{t('order.wholesaler')}</span>
                                         <span>{t('order.product')}</span>
                                         <span>{t('order.gallons')}</span>
-                                        <span>{`${t('order.sale_price_short')} S/`}</span>
+                                        <span>{`${t('order.sale_price_short')} ${symbol()}`}</span>
                                         <span />
                                     </div>
 
@@ -610,9 +607,9 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
 
                                             <Form.Item
                                                 name={[field.name, 'sale_price']}
-                                                label={`${t('order.sale_price_short')} S/`}
+                                                label={`${t('order.sale_price_short')} ${symbol()}`}
                                             >
-                                                <InputNumber min={0} prefix="S/" style={{ width: '100%' }} step={0.0001} />
+                                                <InputNumber min={0} prefix={symbol()} style={{ width: '100%' }} step={0.0001} />
                                             </Form.Item>
 
                                             <div className="ui-products-actions">

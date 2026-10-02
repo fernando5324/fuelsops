@@ -15,6 +15,13 @@ CREATE TABLE tenants (
     phone VARCHAR(30) NULL,
     website VARCHAR(255) NULL,
     logo_media_file_id BIGINT UNSIGNED NULL,
+    -- Identidad y presentacion del cliente (ADR-019). NULL = se usan los
+    -- valores por defecto de config/brand.php. Estructura esperada:
+    --   {"colors": {"primary": "#1B3A6B", "accent": "#F47920", ...},
+    --    "format": {"locale": "es-PE", "symbol": "S/", ...}}
+    -- Prioridad: tenants.details > config/brand.php. Solo se aceptan claves
+    -- que ya existan en el archivo y, para colores, formato #RRGGBB.
+    details JSON NULL,
     status ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by BIGINT UNSIGNED NULL,

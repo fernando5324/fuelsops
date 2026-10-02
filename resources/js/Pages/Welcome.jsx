@@ -7,11 +7,13 @@ import {
     SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
+import { useBrand } from '@/lib/brand';
 
 const { Title, Paragraph, Text } = Typography;
 
 export default function Welcome({ auth, laravelVersion, phpVersion }) {
     const { t } = useTranslations();
+    const brand = useBrand();
     return (
         <Layout
             style={{
@@ -28,10 +30,10 @@ export default function Welcome({ auth, laravelVersion, phpVersion }) {
             <Card style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
                 <Space direction="vertical" size="large" style={{ width: '100%' }}>
                     <ApartmentOutlined
-                        style={{ fontSize: 64, color: '#1B3A6B' }}
+                        style={{ fontSize: 64, color: brand.colors.primary }}
                     />
                     <Title level={2} style={{ margin: 0 }}>
-                        {t('common.brand')}
+                        {brand.client}
                     </Title>
                     <Paragraph type="secondary" style={{ margin: 0 }}>
                         {t('pages.hero_slogan')}

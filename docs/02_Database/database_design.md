@@ -108,8 +108,39 @@ Current rules:
     to it. End users do not notice that other organizations may exist (no
     tenant switcher or tenant selector in the UI).
 -   The public order form and unauthenticated flows operate under the default
-    organization (Sertoco), resolved through `config/sertoco.php`
+    organization (Sertoco), resolved through `config/platform.php`
     (`default_tenant_id`).
+
+### Tenant identity and branding (ADR-019)
+
+`tenants.details` is a JSON column with the per-client customization of the
+platform presentation:
+
+```json
+{
+  "colors": { "primary": "#1B3A6B", "accent": "#F47920", "...": "..." },
+  "format": { "locale": "es-PE", "symbol": "S/", "...": "..." }
+}
+```
+
+Rules:
+
+-   `details` is **nullable and additive**: `NULL` means "use the platform
+    defaults", so clients can be migrated one by one.
+-   Priority is `tenants.details` > `config/brand.php` (the single source of the
+    default palette, name and formatting conventions). `App\Services\BrandService`
+    performs the merge once per request.
+-   Only keys that already exist in `config/brand.php` are accepted, and colors
+    must match `#RRGGBB`; anything else is discarded so a malformed `details`
+    cannot break the design.
+-   `tenants.name` is the **client** name and it is what the platform displays
+    (header above the menu and browser title), so each client sees its own
+    name. `config('brand.name')` (`fuels-ops`) is the internal product name and
+    is never shown to end users.
+-   `tenants.logo_media_file_id` is not rendered yet: the only media route
+    (`media.download`) serves with `Content-Disposition: attachment`, which an
+    `<img>` does not display. Until an inline media route exists, the logo of
+    `config('brand.logo')` is used.
 
 ## Catalogs
 

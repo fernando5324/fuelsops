@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { usePage } from '@inertiajs/react';
 import useTranslations from '@/hooks/useTranslations';
-import logo from '../../images/logo.png';
+import { useBrand } from '@/lib/brand';
 
 export default function PublicHeader() {
     const { t } = useTranslations();
-    const { tenant } = usePage().props;
+    const brand = useBrand();
     const [online, setOnline] = useState(
         typeof navigator !== 'undefined' ? navigator.onLine : true,
     );
@@ -26,7 +25,10 @@ export default function PublicHeader() {
     return (
         <header className="ui-public-header">
             <span className="ui-header-logo">
-                <img key={logo} src={logo} alt={tenant?.name || t('common.brand')} />
+                {/* `brand.client` es el nombre del cliente (tenants.name), que es lo que
+                debe leerse; el logo viene de `brand.logo` para que todos los
+                puntos de entrada usen el mismo origen (ADR-019). */}
+                <img src={brand.logo} alt={brand.client} />
             </span>
             <span className={`ui-pill ${online ? 'ui-pill--online' : 'ui-pill--offline'}`}>
                 <span className="ui-pill-dot" />

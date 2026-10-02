@@ -2,8 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Tenant;
-use App\Services\TenantContext;
+use App\Services\BrandService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -36,15 +35,12 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
-            'tenant' => function () {
-                $tenant = Tenant::find(TenantContext::id());
-
-                return [
-                    'id' => $tenant?->id ?? TenantContext::id(),
-                    'name' => $tenant?->name ?? config('app.name', 'Laravel'),
-                    'slug' => $tenant?->slug ?? config('sertoco.default_tenant_slug'),
-                ];
-            },
+            // Cliente activo. `name` sale de `tenants.name` (la base de datos):
+            // es lo que ve el usuario arriba del menú y en el título.
+            'tenant' => fn () => app(BrandService::class)->tenantProp(),
+            // Identidad + paleta + formato ya resueltos (config/brand.php
+            // sobre tenants.details). El front los consume por `useBrand()`.
+            'brand' => fn () => app(BrandService::class)->toArray(),
             'flash' => fn () => $request->session()->get('flash'),
             'locale' => fn () => app()->getLocale(),
             'translations' => fn () => collect(glob(lang_path(app()->getLocale()).'/*.php'))

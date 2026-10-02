@@ -10,20 +10,26 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import ProcessingProvider from '@/Components/ProcessingProvider';
 import ProcessingOverlay from '@/Components/ProcessingOverlay';
+import { FALLBACK_BRAND, brandThemeTokens, cssColor } from '@/lib/brand';
 
 dayjs.locale('es');
 
-let brand = import.meta.env.VITE_APP_NAME || 'Sertoco';
+// Nombre interno del producto (config/brand.php). El título del navegador lo
+// reemplaza por el nombre del CLIENTE (tenants.name): cada cliente ve el suyo.
+let product = FALLBACK_BRAND.product;
 
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${brand}` : brand),
+    title: (title) => (title ? `${title} - ${product}` : product),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,
             import.meta.glob('./Pages/**/*.jsx'),
         ),
     setup({ el, App, props }) {
-        brand = props.initialPage?.props?.tenant?.name || brand;
+        const brand = props.initialPage?.props?.brand || FALLBACK_BRAND;
+        const colors = { ...FALLBACK_BRAND.colors, ...(brand.colors || {}) };
+
+        product = brand.client || brand.product || product;
 
         const root = createRoot(el);
 
@@ -32,24 +38,13 @@ createInertiaApp({
                 locale={esES}
                 theme={{
                     token: {
-                        colorPrimary: '#1B3A6B',
-                        colorInfo: '#1B3A6B',
-                        colorLink: '#1B3A6B',
-                        colorTextHeading: '#0F172A',
-                        colorBgLayout: '#F8FAFC',
-                        colorText: '#0F172A',
-                        colorTextSecondary: '#64748B',
-                        colorBorder: '#CBD5E1',
-                        colorBorderSecondary: '#E2E8F0',
-                        colorFillAlter: '#F1F5F9',
-                        colorSuccess: '#10B981',
-                        colorError: '#EF4444',
+                        ...brandThemeTokens(colors),
                         borderRadius: 8,
                         fontFamily:
                             "'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     },
                     components: {
-                        Card: { headerBg: '#FFFFFF' },
+                        Card: { headerBg: colors.surface },
                     },
                 }}
             >
@@ -63,6 +58,8 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#1B3A6B',
+        // Se lee la variable del `<style>` que imprime el servidor, porque esta
+        // opción se evalúa antes de montar React.
+        color: cssColor('--color-primary') || FALLBACK_BRAND.colors.primary,
     },
 });

@@ -3,7 +3,7 @@
 return [
     // ─── Reporte "Avance de ventas" (ADR-017) ─────────────────────────────────
 
-    'title' => 'Avance de ventas',
+    'title' => __('common.sales_report'),
     'description' => 'Resumen de ventas y márgenes por período',
 
     // Filtros
@@ -49,10 +49,10 @@ return [
     ],
 
     // Cards de resumen (ADR-017 §6)
-    'total_gallons' => 'Total galones',
+    'total_gallons' => __('common.total_gallons'),
     'total_purchases' => 'Compras',
     'total_sales' => 'Ventas',
-    'total_margin' => 'Margen',
+    'total_margin' => __('common.margin'),
     'unit_gallons' => 'gal',
     'cards_hint' => 'Del :orders pedido(s) del período',
     'margin_formula' => 'Suma de galones × margen de cada relación planta+producto (ADR-013)',
@@ -62,15 +62,15 @@ return [
     'evolution_desc' => 'Compras y ventas en el eje izquierdo, margen en el derecho',
     'series_purchases' => 'Compras',
     'series_sales' => 'Ventas',
-    'series_margin' => 'Margen',
+    'series_margin' => __('common.margin'),
     'axis_amount' => 'S/',
-    'axis_gallons' => 'Galones',
+    'axis_gallons' => __('common.gallons'),
 
     // Gráfico de galones por producto (ADR-017 §8/§9/§10)
     'pie_title' => 'Galones por producto',
     'pie_desc' => 'Use la leyenda para ocultar o mostrar un producto',
-    'pie_tooltip_product' => 'Producto',
-    'pie_tooltip_gallons' => 'Galones',
+    'pie_tooltip_product' => __('common.product'),
+    'pie_tooltip_gallons' => __('common.gallons'),
     'pie_tooltip_share' => 'Participación',
     'pie_hint' => 'Ocultar un producto no cambia los datos del reporte, solo la vista.',
 
@@ -78,7 +78,7 @@ return [
     'daily_title' => 'Resumen por día',
     'daily_desc' => 'Solo los días con pedidos',
     'col_date' => 'Fecha',
-    'col_gallons' => 'Total galones',
+    'col_gallons' => __('common.total_gallons'),
     'col_purchases' => 'Compras S/.',
     'col_sales' => 'Ventas S/.',
     'col_margin' => 'Margen S/.',
@@ -98,6 +98,9 @@ return [
     'invalid_month' => 'El mes seleccionado no es válido.',
     'invalid_date' => 'La fecha no es válida.',
     'invalid_range' => 'La fecha "Desde" no puede ser posterior a la fecha "Hasta".',
+    // Cabecera del 422 de la descarga del PDF, que no es una visita Inertia y por
+    // eso no puede usar el redirect con errores de la página web.
+    'invalid_filters' => 'Revisa el período seleccionado antes de exportar.',
 
     // ─── Exportación a PDF (ADR-018) ─────────────────────────────────────────
 
@@ -111,8 +114,11 @@ return [
     // detalle técnico (Chromium, Puppeteer, rutas) va al log, no al usuario.
     'pdf_error' => 'No se pudo generar el PDF. Inténtalo de nuevo o contacta al administrador.',
 
-    'pdf_brand' => 'Avance de ventas',
+    'pdf_brand' => __('common.sales_report'),
     'pdf_generated_at' => 'Generado el :date a las :time',
-    'pdf_footer_page' => 'Página :page de :total',
-    'pdf_source' => 'Fuente: sistema Sertoco',
+    // Pie del PDF. El nombre del cliente se inyecta desde `tenants.name`
+// (ADR-019): con el placeholder, cada cliente ve el suyo en su PDF.
+'pdf_footer_page' => 'Página',
+    'pdf_footer_of' => 'de',
+    'pdf_source' => ':client · Avance de ventas',
 ];

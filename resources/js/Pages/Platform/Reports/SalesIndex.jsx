@@ -18,6 +18,7 @@ import EChart from '@/Components/Charts/EChart';
 import useTranslations from '@/hooks/useTranslations';
 import SalesReportsService from '@/Services/SalesReports';
 import formatMoney from '@/lib/money';
+import { dateFormat, formatNumber, symbol } from '@/lib/format';
 import { buildEvolutionOption, buildPieOption, COLORS, DASH } from '@/lib/reportCharts';
 import dayjs from 'dayjs';
 
@@ -105,8 +106,11 @@ export default function SalesReport({ summary, daily, products, filters, months 
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-        } catch {
-            message.error(t('reports.pdf_error'));
+        } catch (error) {
+            // El Service ya desarma el cuerpo cuando la respuesta no es un PDF
+            // (§21): aquí solo se decide si el detalle es merecido o se muestra
+            // el mensaje genérico. Chromium caído sin detalle → `pdf_error`.
+            message.error(error?.message || t('reports.pdf_error'));
         } finally {
             setExporting(false);
         }
@@ -138,12 +142,14 @@ export default function SalesReport({ summary, daily, products, filters, months 
     const pieOption = useMemo(() => buildPieOption(products, chartLabels), [products, chartLabels]);
 
     // ── Tabla "Resumen por día" (ADR-017 §11) ─────────────────────────────
-    const gallons = (value) =>
-        Number(value || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const gallons = (value) => formatNumber(value || 0, 2);
 
     const moneyCell = (value) => (value === null || value === undefined ? DASH : formatMoney(value));
 
-    const rateCell = (value) => (value === null || value === undefined ? DASH : `S/ ${Number(value).toFixed(2)}`);
+    const rateCell = (value) =>
+        value === null || value === undefined
+            ? DASH
+            : `${symbol()} ${Number(value).toFixed(2)}`;
 
     const columns = [
         {
@@ -152,7 +158,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
             key: 'date',
             width: 130,
             fixed: 'left',
-            render: (value) => (dayjs(value).isValid() ? dayjs(value).format('DD/MM/YYYY') : value),
+            render: (value) => (dayjs(value).isValid() ? dayjs(value).format(dateFormat()) : value),
         },
         {
             title: t('reports.col_gallons'),
@@ -245,7 +251,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
             />
 
             {errors && Object.keys(errors).length > 0 ? (
-                <Alert type="error" showIcon message={Object.values(errors)[0]} style={{ marginBottom: 16 }} />
+                <Alert type="error" showIcon title={Object.values(errors)[0]} style={{ marginBottom: 16 }} />
             ) : null}
 
             <Card className="ui-card-gap" style={{ marginBottom: 16 }}>
@@ -264,7 +270,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
                         className="ui-filter-range"
                         value={rangeDraft}
                         onChange={(value) => setRangeDraft(value || [])}
-                        format="DD/MM/YYYY"
+                        format={dateFormat()}
                         placeholder={[t('reports.filter_range_placeholder.from'), t('reports.filter_range_placeholder.to')]}
                         allowEmpty={[false, false]}
                         aria-label={t('reports.filter_range')}
@@ -287,7 +293,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
                 <Alert
                     type="warning"
                     showIcon
-                    message={t('reports.missing_price', { count: summary.lines_without_price })}
+                    title={t('reports.missing_price', { count: summary.lines_without_price })}
                     style={{ marginBottom: 16 }}
                 />
             ) : null}
@@ -296,7 +302,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
                 <Alert
                     type="info"
                     showIcon
-                    message={t('reports.missing_margin', { count: summary.lines_without_margin })}
+                    title={t('reports.missing_margin', { count: summary.lines_without_margin })}
                     style={{ marginBottom: 16 }}
                 />
             ) : null}
@@ -308,7 +314,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
                             title={t('reports.total_gallons')}
                             value={gallons(summary?.total_gallons)}
                             prefix={<DatabaseOutlined />}
-                            valueStyle={{ color: COLORS.sales }}
+                            styles={{ content: { color: COLORS.sales } }}
                         />
                     </Card>
                 </Col>
@@ -340,12 +346,12 @@ export default function SalesReport({ summary, daily, products, filters, months 
                                 <Statistic
                                     title={
                                         summary?.margin_per_gallon !== null && summary?.margin_per_gallon !== undefined
-                                            ? `${t('reports.total_margin')} · S/ ${Number(summary.margin_per_gallon).toFixed(2)}/${t('reports.unit_gallons')}`
+                                            ? `${t('reports.total_margin')} · ${symbol()} ${Number(summary.margin_per_gallon).toFixed(2)}/${t('reports.unit_gallons')}`
                                             : t('reports.total_margin')
                                     }
                                     value={moneyCell(summary?.total_margin)}
                                     prefix={<RiseOutlined />}
-                                    valueStyle={{ color: COLORS.margin }}
+                                    styles={{ content: { color: COLORS.margin } }}
                                 />
                             </span>
                         </Tooltip>
@@ -382,7 +388,7 @@ export default function SalesReport({ summary, daily, products, filters, months 
                     <Alert
                         type="info"
                         showIcon
-                        message={t('reports.empty_period')}
+                        title={t('reports.empty_period')}
                         description={t('reports.empty_period_hint')}
                     />
                 ) : (

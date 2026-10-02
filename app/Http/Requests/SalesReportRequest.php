@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Carbon;
 
 /**
@@ -26,6 +28,29 @@ class SalesReportRequest extends FormRequest
         // modelos, igual que el resto del panel). No hay nada que autorizar más
         // allá de haber iniciado sesión, que ya exige el grupo `auth`.
         return true;
+    }
+
+    /**
+     * La descarga del PDF NO es una visita de Inertia: la pide `fetch` y espera
+     * un `blob`. Con la redirección por defecto de Laravel, un filtro inválido
+     * devolvía un 302 a `/reportes/avance-ventas` y el Service acababa
+     * descargando **el HTML de esa página renombrado a `.pdf`** (ADR-018
+     * §21/§22). Para esa ruta se fuerza un 422 con JSON, que el front puede
+     * mostrar.
+     *
+     * Solo aplica a la exportación: la página web sigue con su redirect de
+     * siempre, que es lo que espera Inertia para pintar los errores en el formulario.
+     */
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->routeIs('reports.sales.export')) {
+            throw new HttpResponseException(response()->json([
+                'message' => __('reports.invalid_filters'),
+                'errors' => $validator->errors(),
+            ], 422));
+        }
+
+        parent::failedValidation($validator);
     }
 
     public function rules(): array

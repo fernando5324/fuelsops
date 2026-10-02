@@ -26,6 +26,29 @@ export default defineConfig({
     // `outDir` está DENTRO de `publicDir`; sin esto Vite avisa y además intenta
     // copiar `public/` sobre sí mismo. Este build no necesita assets públicos.
     publicDir: false,
+    // Los módulos compartidos (`lib/reportCharts.js` → `lib/format.js`,
+    // `lib/brand.js`, `lib/money.js`) usan el alias `@/`. Al compilar el PDF
+    // fuera de la app hay que declararlo aquí también. Además `lib/brand.js`
+    // importa `@inertiajs/react`: como el PDF corre sin Inertia, se sustituye
+    // por un stub local (ADR-019) en vez de arrastrar React.
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, 'resources/js'),
+            '@inertiajs/react': path.resolve(__dirname, 'resources/js/pdf/inertia-stub.js'),
+        },
+    },
+    // Chromium abre el HTML por `file://`, donde no existe `process`. Varias
+    // librerías del bundle (ECharts entre ellas) leen `process.env.NODE_ENV`
+    // para recortar código, y sin esta definición el bundle entero revienta al
+    // ejecutarse con `ReferenceError: process is not defined`. Con
+    // `'production'` es además el valor que corresponde: este runtime no lleva
+    // comprobaciones de desarrollo, igual que el resto de la aplicación.
+    define: {
+        'process.env.NODE_ENV': JSON.stringify('production'),
+        'process.env': '{}',
+        'process.browser': 'true',
+        global: 'globalThis',
+    },
     build: {
         outDir: 'public/build',
         emptyOutDir: false,

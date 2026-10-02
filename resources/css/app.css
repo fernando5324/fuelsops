@@ -1,16 +1,14 @@
-/* --- Tokens ADR-006: variables centralizadas --- */
-:root {
-    --color-primary: #1b3a6b;
-    --color-accent: #f47920;
-    --color-accent-hover: #e06810;
-    --color-bg: #f8fafc;
-    --color-surface: #ffffff;
-    --color-border: #e2e8f0;
-    --color-ink: #0f172a;
-    --color-muted: #64748b;
-    --color-success: #10b981;
-    --color-danger: #ef4444;
-}
+/* --- Tokens ADR-006 / ADR-019 -------------------------------------------
+   La paleta ya NO vive en este archivo: el servidor imprime en el `<head>` un
+   `<style>` con `:root { --color-* }` generado desde `config/brand.php` +
+   `tenants.details` (ver `resources/views/app.blade.php` y
+   `App\Services\BrandService`). Aquí no debe volver a aparecer ningún
+   hexadecimal, o el CSS y el tenant se desincronizarían.
+
+   Variables disponibles: --color-primary, --color-accent, --color-accent-hover,
+   --color-bg, --color-surface, --color-border (suave), --color-border-strong,
+   --color-fill-soft, --color-ink, --color-text, --color-muted,
+   --color-success, --color-danger. */
 
 /* Reset global — sustituye el preflight de Tailwind (eliminado).
    Sin este bloque el navegador aplica su margin por defecto de 8px al body,
@@ -79,7 +77,7 @@ body {
 .ui-public-header {
     height: 64px;
     background: var(--color-primary);
-    color: #ffffff;
+    color: var(--color-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     display: flex;
     align-items: center;
@@ -94,7 +92,7 @@ body {
     display: inline-flex;
     align-items: center;
     padding: 6px 12px;
-    background: #ffffff;
+    background: var(--color-surface);
     border-radius: 8px;
 }
 
@@ -143,7 +141,7 @@ body {
     margin-right: 10px;
     border-radius: 50%;
     background: var(--color-primary);
-    color: #ffffff;
+    color: var(--color-surface);
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
@@ -231,7 +229,7 @@ body {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--color-fill-soft, #f1f5f9);
+    background: var(--color-fill-soft);
     border: 1px solid var(--color-border);
 }
 
@@ -440,9 +438,9 @@ body {
     gap: 6px;
     padding: 3px 12px;
     border-radius: 999px;
-    background: #f1f5f9;
+    background: var(--color-fill-soft);
     font-size: 13px;
-    color: #64748b;
+    color: var(--color-muted);
     white-space: nowrap;
 }
 
@@ -464,7 +462,7 @@ body {
 .ui-autocomplete-tag.ant-tag {
     margin-inline-start: 6px;
     color: var(--color-muted);
-    background: #f1f5f9;
+    background: var(--color-fill-soft);
     border-color: var(--color-border);
     font-weight: 400;
 }
@@ -590,7 +588,12 @@ body {
     width: 100%;
 }
 
-.ui-chart--empty {
+.ui-chart__empty {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -610,7 +613,7 @@ body {
 
 .ui-report-total > td {
     font-weight: 600;
-    background: #F1F5F9;
+    background: var(--color-fill-soft);
 }
 
 /* --- Confirmación de pedido --- */

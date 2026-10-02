@@ -1,6 +1,14 @@
-# Sertoco Prototype
+# fuels-ops
 
-Prototype system for managing fuel delivery orders for Sertoco.
+Prototype system for managing fuel delivery orders.
+
+> **Nota de nombres (ADR-019):** `fuels-ops` es el nombre **interno del
+> producto**. El **cliente** que usa la plataforma sale de la base de datos
+> (`tenants.name`, id 1; hoy **Fuels-ops**) y es lo que el usuario ve en el
+> panel y en el título del navegador. `fuels-ops` solo aparece en textos
+> internos, nombres de archivo exportados y documentación. Toda la identidad
+> visual (paleta) vive en `config/brand.php` y puede personalizarse por cliente
+> vía `tenants.details`.
 
 ## Purpose
 

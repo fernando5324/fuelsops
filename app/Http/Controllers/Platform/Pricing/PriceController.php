@@ -8,6 +8,7 @@ use App\Models\Plant;
 use App\Models\PlantProduct;
 use App\Models\Product;
 use App\Models\Wholesaler;
+use App\Services\BrandService;
 use App\Services\Pricing\PricingAdminService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -76,7 +77,9 @@ class PriceController extends Controller
 
         $wholesalers = $this->catalog(Wholesaler::where('is_active', 1)->orderBy('name'));
 
-        $fileName = 'sertoco_precios_'.now()->format('Y-m-d').'.xlsx';
+        // Prefijo del cliente (`BrandService::filePrefix()`): cada organización
+        // exporta con su propio nombre. `<slug>_precios_2026-10-01.xlsx`.
+        $fileName = app(BrandService::class)->filePrefix().'_precios_'.now()->format('Y-m-d').'.xlsx';
 
         return Excel::download(new PricesExport($rows, $wholesalers), $fileName);
     }
