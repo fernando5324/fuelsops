@@ -1353,12 +1353,12 @@ CREATE TABLE IF NOT EXISTS order_compartments (
 -- SEEDS
 --
 
--- Organización principal. Toda la data de arranque pertenece a "Sertoco".
+-- Organización principal. Toda la data de arranque pertenece a "fuels-ops".
 -- Las organizaciones aíslan la información (multi-tenant, tenant_id) y el
 -- usuario no percibe la existencia de otras.
 
 INSERT INTO tenants (id, account_id, name, slug, legal_name, tax_id, email, phone, website, logo_media_file_id, status, created_by)
-VALUES (1, NULL, 'Sertoco', 'sertoco', 'Sertoco S.A.C.', '20560398630', 'contacto@sertoco.pe', NULL, NULL, NULL, 'active', 999999);
+VALUES (1, NULL, 'fuels-ops', 'fuelsops', 'fuelsops S.A.C.', '20560398630', 'contacto@fuelsops.com', NULL, NULL, NULL, 'active', 999999);
 
 
 -- Main platform user (owner of the Sertoco organization).
@@ -1366,7 +1366,7 @@ VALUES (1, NULL, 'Sertoco', 'sertoco', 'Sertoco S.A.C.', '20560398630', 'contact
 -- que él designe pueden crear/marcar dueños dentro de su organización.
 
 INSERT INTO users (id, tenant_id, name, first_name, last_name, email, password, remember_token, is_owner, is_active, created_by)
-VALUES (1, 1, 'sistema', 'Alejandro', 'Baltazar', 'lfbaltazarv@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '', 1, 1, 999999);
+VALUES (1, 1, 'lfbaltazarv', 'Luis', 'Baltazar', 'lfbaltazarv@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '', 1, 1, 999999);
 
 
 -- System user used by the public form, seeded catalogs and system changes.
@@ -1381,12 +1381,12 @@ VALUES (999999, 'sistema', 'Sistema', NULL, 'sistema@sertoco.local', '', '', 0, 
 -- Initial order statuses.
 -- pendiente is the default status assigned to orders registered through the
 -- public form. New statuses can be added to this catalog later.
--- Los estados pertenecen a cada organización (aquí, a Sertoco).
+-- Los estados pertenecen a cada organización (aquí, a fuels-ops).
 
 INSERT INTO order_statuses (id, tenant_id, code, name, description, color, is_default, is_active, created_by)
 VALUES
     (1, 1, 'pending', 'Pendiente', 'Pedido registrado desde el formulario público, pendiente de atención.', 'orange', 1, 1, 999999),
-    (2, 1, 'attended', 'Atendido', 'Pedido atendido por Sertoco.', 'green', 0, 1, 999999),
+    (2, 1, 'attended', 'Atendido', 'Pedido atendido por fuels-ops.', 'green', 0, 1, 999999),
     (3, 1, 'cancelled', 'Anulado', 'Pedido anulado.', 'red', 0, 1, 999999);
 
 
