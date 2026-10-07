@@ -37,6 +37,19 @@ INSERT IGNORE INTO users (id, name, first_name, last_name, email, password, reme
 VALUES (999999, 'sistema', 'Sistema', NULL, 'sistema@sertoco.local', '', '', 0, 1, 999999);
 
 -- ---------------------------------------------------------------------------
+-- Configuración de la organización (ADR-021)
+-- ---------------------------------------------------------------------------
+-- Configuración operativa 1:1 con el tenant. De aquí sale el código del pedido
+-- (ADR-020): prefijo PED, numeración desde 1 y relleno de 6 dígitos
+-- (PED-000001, PED-000002, ...). El avance real de la secuencia vive en
+-- order_code_counters.last_number, NO aquí: order_code_start es solo el número
+-- inicial. El contador se crea solo (last_number = 0) la primera vez que se
+-- genera un código de esta organización.
+
+INSERT IGNORE INTO tenant_settings (id, tenant_id, organization_name, default_language, timezone, order_code_prefix, order_code_start, order_code_padding, created_by)
+VALUES (1, 1, 'Sertoco', 'es', 'America/Lima', 'PED', 1, 6, 999999);
+
+-- ---------------------------------------------------------------------------
 -- Estados de pedido (por organización)
 -- ---------------------------------------------------------------------------
 
@@ -79,19 +92,21 @@ INSERT IGNORE INTO drivers (id, tenant_id, license_number, name, is_active, is_d
     (1, 1, 'D12345678', 'Juan Pérez',   1, 0, 1),
     (2, 1, 'D87654321', 'María Gómez',  1, 0, 1);
 
-INSERT IGNORE INTO vehicles (id, tenant_id, license_plate, type, is_active, is_deleted, created_by) VALUES
-    (1, 1, 'ABC-123', 'TANKER',  1, 0, 1),
-    (2, 1, 'DEF-456', 'TANKER',  1, 0, 1),
-    (3, 1, 'GHI-789', 'TRACTOR', 1, 0, 1),
-    (4, 1, 'JKL-012', 'TRACTOR', 1, 0, 1);
+-- Una fila por cisterna con sus dos placas (ADR-023). La placa del tracto es un
+-- dato de la cisterna, no una fila aparte.
+INSERT IGNORE INTO vehicles (id, tenant_id, license_plate, tractor_plate, is_active, is_deleted, created_by) VALUES
+    (1, 1, 'ABC-123', 'GHI-789', 1, 0, 1),
+    (2, 1, 'DEF-456', 'JKL-012', 1, 0, 1);
 
 -- ---------------------------------------------------------------------------
 -- Pedidos de ejemplo
 -- ---------------------------------------------------------------------------
 
-INSERT IGNORE INTO orders (id, tenant_id, order_date, status_id, advisor_id, customer_id, driver_id, tanker_id, tractor_id, notes, created_by) VALUES
-    (1, 1, NOW(), 1, 1, 1, 1, 1, 3, 'Pedido de muestra pendiente.',                                                      1),
-    (2, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 2, 2, 2, 2, 2, 4, 'Pedido de muestra atendido.',                             1);
+-- Pedidos de ejemplo. `source` = 'panel': los sembró el panel como pedidos de
+-- muestra, no como pedidos recibidos en el formulario web (ADR-025).
+INSERT IGNORE INTO orders (id, tenant_id, code, source, order_date, status_id, advisor_id, customer_id, driver_id, tanker_id, tractor_plate, notes, created_by) VALUES
+    (1, 1, 'PED-000001', 'panel', NOW(), 1, 1, 1, 1, 1, 'GHI-789', 'Pedido de muestra pendiente.',                                                      1),
+    (2, 1, 'PED-000002', 'panel', DATE_SUB(NOW(), INTERVAL 1 DAY), 2, 2, 2, 2, 2, 'JKL-012', 'Pedido de muestra atendido.',                             1);
 
 INSERT IGNORE INTO order_details (id, tenant_id, order_id, scop, plant_id, wholesaler_id, product_id, gallons, sale_price, created_by) VALUES
     (1, 1, 1, 'SCOP-0001', 1, 1, 1, 500.00, 12.5000, 1),

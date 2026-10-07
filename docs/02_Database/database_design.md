@@ -25,6 +25,7 @@ order_details
 order_files
 order_deposits          ADR-013
 order_compartments      ADR-015
+vehicle_compartments    ADR-023
 ```
 
 ## Relationships
@@ -76,6 +77,12 @@ orders
   │ 1:N   (ADR-015: un compartimento por fila de la distribución)
   ▼
 order_compartments
+
+vehicles
+  │
+  │ 1:N   (ADR-023: plantilla de cámaras de la cisterna)
+  ▼
+vehicle_compartments
 ```
 
 ## Organizations (multi-tenant)
@@ -97,11 +104,12 @@ Current rules:
     user `sistema` does not belong to any organization). Every query is
     filtered by the current organization at the application level.
 -   Uniqueness rules are **per organization**: RUC (customers), license
-    number (drivers), license plate per vehicle type (vehicles) and status
-    code (order_statuses) are unique within the tenant, so different
-    organizations may share the same values. A vehicle is identified by
-    plate + type: the same plate may be registered both as tanker and as
-    tractor.
+    number (drivers), tank plate (vehicles) and status code (order_statuses) are
+    unique within the tenant, so different organizations may share the same
+    values. Since ADR-023 a vehicle is identified by its **tank plate alone**
+    (`uq_vehicles_tenant_plate`); the tractor plate is another attribute of that
+    row, so the same plate may be a cisterna in one order and the tracto of
+    another without any conflict.
 -   `order_statuses` is an organization-level catalog: each tenant has its own
     statuses (initially pending/attended/cancelled seeded for Sertoco).
 -   The main organization is **Sertoco** (id 1); all current seed data belongs
@@ -184,26 +192,54 @@ Current fields:
 Future integrations may provide additional legal or regulatory
 information.
 
-## Vehicles
+## Vehicles (ADR-023)
 
-Vehicles are stored independently and currently support two types:
+A vehicle is a **tanker (cisterna)**: one row with both plates of the unit.
 
--   `TANKER`
--   `TRACTOR`
+-   `license_plate`: tanker plate
+-   `tractor_plate`: tractor plate that moves it (may be equal to
+    `license_plate`)
 
-The order references one tanker and one tractor.
+There is no `type` column and no separate row for the tractor: before ADR-023
+the tractor was a second row distinguished by `type = 'TRACTOR'`, which forced
+the same plate to exist in two entities. Uniqueness is now
+`uq_vehicles_tenant_plate (tenant_id, license_plate)`.
+
+`tractor_plate` is the **current** state of the fleet: registering an order with
+a different tractor updates it (last known reality wins). The day-by-day history
+is preserved in `orders.tractor_plate`, a snapshot taken when the order was
+created (see Orders).
 
 ## Orders
 
 An order stores:
 
+-   Operational code (`code`, ADR-020): the identifier the user sees
+    (`PED-000001`). Unique **per tenant** (`uq_orders_tenant_code`), editable
+    from the panel, and completely independent of `id`, which stays the
+    technical key used by URLs, relations and attachments. The index does not
+    include `is_deleted`: a trashed order keeps its code reserved and numbers
+    are never recycled.
 -   Order date
 -   Advisor
 -   Customer
 -   Driver
--   Tanker
--   Tractor
+-   Tanker (`tanker_id` → `vehicles`, the cisterna)
+-   `tractor_plate`: snapshot of the tractor plate used that day (ADR-023).
+    There is no `tractor_id`: the tractor is not an entity of its own, and a
+    FK would freeze the plate of the day and force a tractor row per plate.
+-   Registration source (`source`, ADR-025): `public` when the customer sent the
+    order from the web form, `panel` when a user of the panel registered it by
+    hand. It is **independent of `created_by`**, which always keeps the real
+    actor (the `sistema` user 999999 when the web form is used without a
+    session), so a customer order is never attributed to the main user. It is
+    set once at creation and never changes when the order is edited.
 -   Notes
+
+The code is **generated**, never derived from the previous one (ADR-020 §12):
+`tenant_settings.order_code_prefix` / `order_code_start` /
+`order_code_padding` (ADR-021) define the format and `order_code_counters`
+holds the per-tenant sequence (`last_number`), so there is no `MAX(code) + 1`.
 
 An order also **has** (never stores inline): details, deposits, compartment
 distribution, files, status history and deletion history.
@@ -217,6 +253,41 @@ orders (1)
     ├── order_status_history (N)
     └── order_deletions (N)    ADR-011 (histórico de papelera)
 ```
+
+## Tenant settings
+
+`tenants` holds the **identity** of the organization; `tenant_settings` (1:1,
+ADR-021) holds its **operational configuration**: site name and description,
+language, timezone, contact data, `business_hours` / `social_links` /
+`branding` (JSON) and the order code settings
+(`order_code_prefix`, `order_code_start`, `order_code_padding`).
+
+``` text
+tenants (1)
+    ├── users (N)
+    └── tenant_settings (1)    ADR-021
+```
+
+``` text
+tenants (1)
+    └── order_code_counters (1)    ADR-020 §13: secuencia por tenant
+                                    (last_number)
+```
+
+Notes:
+
+-   `tenant_settings` keeps `is_deleted` by convention, but conceptually it is
+    never deleted: the configuration is updated in place. The
+    `UNIQUE (tenant_id)` allows only one row per organization.
+-   `order_code_counters` is a **technical** table: one row per tenant, no
+    `is_deleted`, no audit of users. `last_number` is the last number handed
+    out; when the row has to be created it is seeded with
+    `max(order_code_start - 1, COUNT(orders.code))` so a tenant that already
+    had orders never repeats a number, and the first code uses
+    `order_code_start`.
+-   Branding already resolves from `tenants.details` (ADR-019).
+    `tenant_settings.branding` is left unused so far: reworking branding is a
+    separate decision.
 
 ## Order details
 
@@ -242,6 +313,8 @@ whole order, and a detail's gallons can be split across several of them.
 
 Current fields:
 
+-   `vehicle_id` (tank that received the load, ADR-023; always written by the
+    server from the order's `tanker_id`, never taken from the form)
 -   `compartment_number` (the 1..N numbering of the compartment)
 -   `product_id` (product of the detail line loaded in that compartment)
 -   `scop` (SCOP of that same detail line)
@@ -265,6 +338,37 @@ Rules:
 - Like deposits, the data is historical for the order: the trash (ADR-011) does
   not touch it, the foreign key to `orders` is `ON DELETE RESTRICT` and rows are
   soft-deleted (`is_deleted`).
+- `vehicle_id` is redundant with `orders.tanker_id` on purpose: it makes the
+  "distributions of this tank" query direct (the one the autocomplete uses), it
+  keeps the tank recorded even if the order's is ever corrected, and it documents
+  in the row itself where the load went.
+
+## Vehicle compartments (ADR-023)
+
+`vehicle_compartments` is the **template** of each tank: how many chambers it
+has and what volume (Volumen Gas) each one holds. It is the vehicle's master
+data, not the order's: what was loaded in each chamber on a given day lives in
+`order_compartments` (§ above).
+
+Fields:
+
+-   `vehicle_id` (tank the chamber belongs to)
+-   `compartment_number` (1..N within the tank)
+-   `scop` (**nullable**: a chamber can carry any product; when present it
+    auto-links the row with the matching detail line)
+-   `volume` (gallons of the chamber)
+-   `is_active` / `is_deleted` / audit
+
+Rules:
+
+- The first order that declares a distribution for a tank creates its template;
+  later orders and panel edits **reconcile** it with what the user declared (last
+  declared reality wins), so the template follows the real fleet. It has no
+  screen of its own yet: it is administered through the public form.
+- It has **no unique index** on `(vehicle_id, compartment_number)` on purpose:
+  reconciliation soft-deletes the surplus rows, and the `LogicalDelete` global
+  scope would hide them and make the INSERT collide (same gotcha as
+  `order_compartments` and `plant_products`).
 
 ## Provisional calculations
 

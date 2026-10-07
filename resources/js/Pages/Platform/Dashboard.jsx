@@ -33,10 +33,11 @@ export default function Dashboard({ statuses, counts, total_orders, recent }) {
 
     const columns = [
         {
+            // Código operativo del pedido (ADR-020); el enlace va por id.
             title: t('order.order_number'),
-            dataIndex: 'id',
-            width: 90,
-            render: (id) => <Link href={`/pedidos/${id}`}>{`#${id}`}</Link>,
+            dataIndex: 'code',
+            width: 140,
+            render: (code, row) => <Link href={`/pedidos/${row.id}`}>{code || '-'}</Link>,
         },
         {
             title: t('order.order_date'),

@@ -16,6 +16,7 @@ use App\Models\OrderStatusHistory;
 use App\Models\Plant;
 use App\Models\Product;
 use App\Models\Vehicle;
+use App\Models\VehicleCompartment;
 use App\Models\Wholesaler;
 use App\Services\Pricing\PricingMatrix;
 use Illuminate\Support\Carbon;
@@ -33,6 +34,7 @@ class OrderService
     public function __construct(
         private readonly MediaService $mediaService,
         private readonly PricingMatrix $matrix,
+        private readonly OrderCodeService $orderCodes,
     ) {
     }
 
@@ -40,19 +42,28 @@ class OrderService
      * Crea una orden con sus detalles y archivos en una sola transacción.
      * El cliente se reutiliza por tax_id o se crea (ADR-004).
      *
+     * `$source` es el ORIGEN del registro (ADR-025): `public` para el formulario
+     * web del cliente y `panel` para el alta manual del panel. Es un parámetro
+     * explícito y NO se deduce de `auth()`: un pedido del formulario web
+     * enviado por un usuario interno sigue siendo `public` (aunque `created_by`
+     * guarde ese usuario). El valor por defecto es `public`, el camino más
+     * frecuente y el que no debe malinterpretarse.
+     *
      * @param  array  $data  ['order_date', 'advisor_id', 'customer', 'driver_id',
-     *                       'tanker_id', 'tractor_id', 'notes', 'details',
+     *                       'tanker', 'tractor_plate', 'notes', 'details',
      *                       'compartments', 'files']
      */
-    public function create(array $data): Order
+    public function create(array $data, string $source = 'public'): Order
     {
         $customer = $this->resolveCustomer($data['customer'] ?? []);
 
-        // Chofer y vehículos: se reutilizan por licencia/placa o se crean si
-        // no existen (flujo público, mismo patrón que resolveCustomer).
+        // Chofer y cisterna: se reutilizan por licencia/placa o se crean si no
+        // existen (flujo público, mismo patrón que resolveCustomer). La placa
+        // del tracto es un dato del vehículo (ADR-023), no una entidad: se
+        // normaliza a mayúsculas y se guarda como snapshot en el pedido.
         $data['driver_id'] = $this->resolveDriver($data['driver'] ?? [])->id;
-        $data['tanker_id'] = $this->resolveVehicle($data['tanker'] ?? [], Vehicle::TYPE_TANKER)->id;
-        $data['tractor_id'] = $this->resolveVehicle($data['tractor'] ?? [], Vehicle::TYPE_TRACTOR)->id;
+        $data['tractor_plate'] = $this->normalizePlate($data['tractor_plate'] ?? null);
+        $data['tanker'] = $this->resolveVehicle($this->tankerInput($data));
 
         // Validación estricta multi-tenant: todas las entidades referenciadas
         // deben pertenecer a la organización destino (scope del contexto).
@@ -67,15 +78,23 @@ class OrderService
             $orderDate = now();
         }
 
-        $order = DB::transaction(function () use ($data, $customer, $orderDate) {
+        $order = DB::transaction(function () use ($data, $customer, $orderDate, $source) {
             $order = Order::create([
+                // Código operativo del pedido (ADR-020): lo genera la secuencia
+                // por organización dentro de esta misma transacción. Ni el
+                // formulario público ni el alta manual del panel lo piden.
+                'code' => $this->orderCodes->next(),
+                // Origen del registro (ADR-025): `public` (formulario web del
+                // cliente) o `panel` (alta manual). `created_by` lo pone el
+                // trait Auditable con el actor real de la petición.
+                'source' => $source,
                 'order_date' => $orderDate,
                 'status_id' => $this->pendingStatusId(),
                 'advisor_id' => $data['advisor_id'],
                 'customer_id' => $customer->id,
                 'driver_id' => $data['driver_id'],
-                'tanker_id' => $data['tanker_id'],
-                'tractor_id' => $data['tractor_id'],
+                'tanker_id' => $data['tanker']->id,
+                'tractor_plate' => $data['tractor_plate'],
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -118,7 +137,10 @@ class OrderService
 
     /**
      * Actualiza una orden completa (panel, Fase B). Transacción:
-     * - Cliente/chofer/vehículos se reutilizan o crean (find-or-create).
+     * - Cliente/chofer/cisterna se reutilizan o crean (find-or-create).
+     * - La placa del tracto se normaliza a mayúsculas y se congela como
+     *   snapshot del pedido; si cambió, la cisterna del parque se actualiza
+     *   (ADR-023).
      * - Detalle: soft-delete de los actuales y alta de los nuevos (aditivo,
      *   conservando auditoría y referencias históricas).
      * - Distribución por compartimentos (ADR-015): mismo criterio que el
@@ -130,8 +152,8 @@ class OrderService
     {
         $customer = $this->resolveCustomer($data['customer'] ?? []);
         $data['driver_id'] = $this->resolveDriver($data['driver'] ?? [])->id;
-        $data['tanker_id'] = $this->resolveVehicle($data['tanker'] ?? [], Vehicle::TYPE_TANKER)->id;
-        $data['tractor_id'] = $this->resolveVehicle($data['tractor'] ?? [], Vehicle::TYPE_TRACTOR)->id;
+        $data['tractor_plate'] = $this->normalizePlate($data['tractor_plate'] ?? null);
+        $data['tanker'] = $this->resolveVehicle($this->tankerInput($data));
 
         $this->assertReferencedEntities($data);
 
@@ -140,12 +162,17 @@ class OrderService
 
         DB::transaction(function () use ($order, $data, $customer, $orderDate) {
             $order->update([
+                // El código es editable (ADR-020 §6): cambiarlo no toca el id ni
+                // las relaciones; la unicidad la validó el request contra el
+                // tenant (incluidos los pedidos en papelera, que reservan su
+                // código porque el índice único no mira `is_deleted`).
+                'code' => $data['code'],
                 'order_date' => $orderDate,
                 'advisor_id' => $data['advisor_id'],
                 'customer_id' => $customer->id,
                 'driver_id' => $data['driver_id'],
-                'tanker_id' => $data['tanker_id'],
-                'tractor_id' => $data['tractor_id'],
+                'tanker_id' => $data['tanker']->id,
+                'tractor_plate' => $data['tractor_plate'],
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -225,31 +252,86 @@ class OrderService
     }
 
     /**
-     * Reutiliza el vehículo por placa y tipo; si no existe lo crea con el
-     * tipo pedido. La misma placa puede estar registrada como cisterna y como
-     * tracto (unidades distintas): la unicidad es por (placa, tipo).
+     * Arma la entrada de `resolveVehicle()` uniendo la placa de la cisterna
+     * (`tanker.license_plate`) con la del tracto (`tractor_plate`, nivel superior
+     * del payload). Sin esto, el tracto se guardaría solo como snapshot del
+     * pedido y la fila de `vehicles` se quedaría con el dato viejo: la placa del
+     * tracto es de la cisterna, no del pedido.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    public function resolveVehicle(array $input, string $type): Vehicle
+    private function tankerInput(array $data): array
     {
-        $licensePlate = strtoupper(trim((string) ($input['license_plate'] ?? '')));
+        $tanker = $data['tanker'] ?? [];
+        $tanker['license_plate'] = is_array($tanker) ? ($tanker['license_plate'] ?? null) : null;
+        $tanker['tractor_plate'] = $data['tractor_plate'] ?? null;
 
-        $field = $type === Vehicle::TYPE_TANKER ? 'tanker.license_plate' : 'tractor.license_plate';
+        return $tanker;
+    }
 
-        if ($licensePlate === '') {
+    /**
+     * Reutiliza la cisterna por su placa; si no existe la crea (ADR-023).
+     *
+     * Una fila de `vehicles` es una CISTERNA con sus dos placas, así que la
+     * búsqueda es solo por `license_plate` y la unicidad también
+     * (`uq_vehicles_tenant_plate`): no hay `type` ni entidad "tractor".
+     *
+     * La placa del tracto se guarda en la MISMA fila: si viene informada y
+     * cambió, se actualiza (última realidad gana) y el pedido guarda su
+     * snapshot en `orders.tractor_plate`.
+     *
+     * Se busca con `withDeleted()` a propósito: el índice único no incluye
+     * `is_deleted`, así que un `firstOrCreate` a secas chocaría con
+     * duplicate key si la placa quedó dada de baja (mismo gotcha que
+     * `plant_products`); en ese caso se revive la fila en vez de duplicarla.
+     */
+    public function resolveVehicle(array $input): Vehicle
+    {
+        $licensePlate = $this->normalizePlate($input['license_plate'] ?? null);
+        $tractorPlate = $this->normalizePlate($input['tractor_plate'] ?? null);
+
+        if ($licensePlate === null) {
             throw ValidationException::withMessages([
-                $field => __('order.vehicle_required'),
+                'tanker.license_plate' => __('order.vehicle_required'),
             ]);
         }
 
-        return Vehicle::firstOrCreate(
-            [
+        $vehicle = Vehicle::withDeleted()->where('license_plate', $licensePlate)->first();
+
+        if (! $vehicle) {
+            return Vehicle::create([
                 'license_plate' => $licensePlate,
-                'type' => $type,
-            ],
-            [
+                'tractor_plate' => $tractorPlate,
                 'is_active' => 1,
-            ],
-        );
+            ]);
+        }
+
+        // Se reviven las filas dadas de baja o desactivadas y se actualiza la
+        // placa del tracto solo si cambió. `update()` no genera SQL si nada
+        // quedó dirty, así que no hace falta condicionarlo.
+        $changes = ['is_deleted' => 0, 'is_active' => 1];
+
+        if ($tractorPlate !== null && $tractorPlate !== $vehicle->tractor_plate) {
+            $changes['tractor_plate'] = $tractorPlate;
+        }
+
+        $vehicle->update($changes);
+
+        return $vehicle->refresh();
+    }
+
+    /**
+     * Normaliza una placa a mayúsculas sin espacios (los dos campos de
+     * `vehicles` y el snapshot `orders.tractor_plate`). Devuelve null si no
+     * llega nada: la placa de tracto es obligatoria en el formulario, pero el
+     * servicio no la exige para no romper datos históricos.
+     */
+    private function normalizePlate(mixed $plate): ?string
+    {
+        $plate = mb_strtoupper(trim((string) $plate));
+
+        return $plate === '' ? null : $plate;
     }
 
     /**
@@ -465,16 +547,23 @@ class OrderService
     }
 
     /**
-     * Registra la distribución por compartimentos del pedido (ADR-015). Una
-     * fila por compartimento, en el orden en que llegan (que es el orden en que
-     * el usuario las ve): `compartment_number` es la numeración 1..N.
+     * Registra la distribución por compartimentos del pedido (ADR-015 + ADR-023).
+     * Una fila por compartimento, en el orden en que llegan (que es el orden en
+     * que el usuario las ve): `compartment_number` es la numeración 1..N.
      *
      * El producto y el SCOP los valida el request (deben ser una línea del
      * detalle que se está guardando), aquí solo se persisten.
+     *
+     * `vehicle_id` NO viene del formulario: se toma de la cisterna del pedido
+     * (`tanker_id`), que es la única fuente válida (ADR-023). Y cada alta o
+     * edición reconcilia la plantilla de cámaras de esa cisterna
+     * (`vehicle_compartments`) con lo que el usuario declaró, que es la última
+     * realidad del parque.
      */
     public function storeCompartments(Order $order, array $rows): void
     {
         $number = 0;
+        $declared = [];
 
         foreach ($rows as $row) {
             $number++;
@@ -482,10 +571,88 @@ class OrderService
             OrderCompartment::create([
                 'tenant_id' => $order->tenant_id,
                 'order_id' => $order->id,
+                'vehicle_id' => $order->tanker_id,
                 'compartment_number' => $number,
                 'product_id' => $row['product_id'],
                 'scop' => trim((string) $row['scop']),
                 'volume' => $row['volume'],
+                'created_by' => $this->actorId(),
+            ]);
+
+            $declared[$number] = [
+                'scop' => trim((string) $row['scop']),
+                'volume' => $row['volume'],
+            ];
+        }
+
+        $this->reconcileVehicleCompartments($order, $declared);
+    }
+
+    /**
+     * Reconcilia la plantilla de cámaras de la cisterna (ADR-023) con lo que el
+     * usuario declaró en este pedido:
+     *
+     * - la crea si la cisterna todavía no tiene cámaras: es el primer pedido que
+     *   describe su distribución;
+     * - actualiza SCOP/volumen de las que coinciden por numeración;
+     * - da de baja las que sobran (la cisterna perdió cámaras);
+     * - y crea las que falten, si el usuario declaró más de las que había.
+     *
+     * Solo se llama cuando el pedido trae distribución (`$declared` no vacío):
+     * un pedido que no declara compartimentos no dice nada del vehículo y no
+     * debe tocar su plantilla.
+     */
+    private function reconcileVehicleCompartments(Order $order, array $declared): void
+    {
+        if ($declared === []) {
+            return;
+        }
+
+        $vehicleId = (int) $order->tanker_id;
+
+        $current = VehicleCompartment::where('vehicle_id', $vehicleId)
+            ->orderBy('compartment_number')
+            ->get();
+
+        foreach ($current as $template) {
+            $number = (int) $template->compartment_number;
+
+            if (! array_key_exists($number, $declared)) {
+                $template->delete();
+
+                continue;
+            }
+
+            $changes = [];
+
+            if ($template->scop !== $declared[$number]['scop']) {
+                $changes['scop'] = $declared[$number]['scop'];
+            }
+
+            // Se compara con bcmath a 2 decimales porque la columna es
+            // DECIMAL(12,2) y el formulario puede mandar "2" donde la plantilla
+            // tiene "2.00": sin esto se actualizaría la fila sin motivo.
+            if (bccomp((string) $template->volume, (string) $declared[$number]['volume'], 2) !== 0) {
+                $changes['volume'] = $declared[$number]['volume'];
+            }
+
+            if ($changes !== []) {
+                $template->update($changes);
+            }
+        }
+
+        foreach ($declared as $number => $data) {
+            if ($current->contains('compartment_number', $number)) {
+                continue;
+            }
+
+            VehicleCompartment::create([
+                'tenant_id' => $order->tenant_id,
+                'vehicle_id' => $vehicleId,
+                'compartment_number' => $number,
+                'scop' => $data['scop'],
+                'volume' => $data['volume'],
+                'is_active' => 1,
                 'created_by' => $this->actorId(),
             ]);
         }
@@ -728,6 +895,7 @@ class OrderService
         // pedido que la papelera no toca y se copian al snapshot (solo los
         // activos, igual que los depósitos).
         $compartments = $order->compartments->map(fn (OrderCompartment $compartment) => [
+            'vehicle_id' => (int) $compartment->vehicle_id,
             'compartment_number' => (int) $compartment->compartment_number,
             'product_id' => $compartment->product_id,
             'product_name' => $compartment->product?->name,
@@ -738,8 +906,16 @@ class OrderService
         return [
             'order' => [
                 'id' => $order->id,
+                'code' => $order->code,
+                // Origen del registro (ADR-025): queda congelado en el snapshot
+                // para saber, tras el papelero, si lo envío el cliente o lo
+                // registró alguien del panel.
+                'source' => $order->source,
                 'order_date' => $order->order_date?->format('Y-m-d H:i:s'),
                 'status' => $order->status?->name,
+                // Snapshot de la placa de tracto del día (ADR-023): sin FK, así
+                // que es el único lugar donde queda registrada.
+                'tractor_plate' => $order->tractor_plate,
             ],
             'customer' => [
                 'id' => $order->customer_id,
@@ -766,8 +942,9 @@ class OrderService
         $checks = [
             ['type' => Advisor::class, 'id' => $data['advisor_id'] ?? null],
             ['type' => Driver::class, 'id' => $data['driver_id'] ?? null],
-            ['type' => Vehicle::class, 'id' => $data['tanker_id'] ?? null, 'type_value' => Vehicle::TYPE_TANKER],
-            ['type' => Vehicle::class, 'id' => $data['tractor_id'] ?? null, 'type_value' => Vehicle::TYPE_TRACTOR],
+            // La cisterna viene ya resuelta (ADR-023): es la fila que se usó
+            // para resolver o crear el vehículo, no un id del formulario.
+            ['type' => Vehicle::class, 'id' => $data['tanker']->id ?? null],
         ];
 
         foreach ($data['details'] ?? [] as $detail) {
@@ -788,10 +965,6 @@ class OrderService
             }
 
             $query = ($check['type'])::query()->whereKey((int) $check['id']);
-
-            if (isset($check['type_value'])) {
-                $query->where('type', $check['type_value']);
-            }
 
             if (! $query->exists()) {
                 throw ValidationException::withMessages([

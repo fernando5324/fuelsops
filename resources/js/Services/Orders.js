@@ -5,7 +5,11 @@ const base = '/api/orders';
 export const Orders = {
     routes: {
         index: '/pedidos',
-        create: '/pedidos/registro',
+        // Alta MANUAL desde el panel (ADR-025) y su POST. El formulario público
+        // del cliente es otra página distinta (`publicCreate`).
+        create: '/pedidos/nuevo',
+        store: '/pedidos',
+        publicCreate: '/pedidos/registro',
         show: (id) => `/pedidos/${id}`,
         edit: (id) => `/pedidos/${id}/editar`,
         update: (id) => `/pedidos/${id}`,
@@ -23,7 +27,9 @@ export const Orders = {
     changeStatus: (id, data) => http.post(`${base}/${id}/status`, data),
     lookupCustomer: (taxId) => http.post('/orders/lookup-customer', { tax_id: taxId }),
     lookupDriver: (licenseNumber) => http.post('/orders/lookup-driver', { license_number: licenseNumber }),
-    lookupVehicle: (licensePlate, type) => http.post('/orders/lookup-vehicle', { license_plate: licensePlate, type }),
+    // ADR-023: se consulta por la placa de la cisterna y devuelve la placa del
+    // tracto que tiene hoy más la plantilla de sus compartimentos.
+    lookupVehicle: (licensePlate) => http.post('/orders/lookup-vehicle', { license_plate: licensePlate }),
     trash: (id, data) => http.post(`${base}/${id}/trash`, data),
 };
 

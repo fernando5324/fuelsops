@@ -93,11 +93,11 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
     return (
         <PanelLayout>
             <PageHeader
-                title={`${t('order.order_detail')} #${order?.id}`}
+                title={`${t('order.order_detail')} ${order?.code || ''}`.trim()}
                 headTitle={
                     isTrashed
-                        ? `${t('menus.trash')} #${order?.id}`
-                        : `${t('menus.orders')} #${order?.id}`
+                        ? `${t('menus.trash')} ${order?.code || ''}`.trim()
+                        : `${t('menus.orders')} ${order?.code || ''}`.trim()
                 }
                 extra={headerExtra}
             />
@@ -185,7 +185,7 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
                         index={4}
                         items={[
                             { label: t('order.tanker'), value: order?.tanker?.license_plate || '-' },
-                            { label: t('order.tractor'), value: order?.tractor?.license_plate || '-' },
+                            { label: t('order.tractor'), value: order?.tractor_plate || '-' },
                         ]}
                     />
                 </Col>
@@ -219,7 +219,7 @@ export default function OrdersShow({ order, totals, supplier_payables, statuses,
                     </SubmitButton>,
                 ]}
             >
-                <p>{t('order.confirm_trash_lead', { id: order?.id || '' })}</p>
+                <p>{t('order.confirm_trash_lead', { code: order?.code || '-' })}</p>
                 <p>{t('order.trash_away_from_list')}</p>
                 <p>{t('order.trash_keeps_payments_docs')}</p>
                 <Space direction="vertical" style={{ width: '100%' }} size={8}>

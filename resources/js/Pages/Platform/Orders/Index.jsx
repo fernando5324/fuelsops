@@ -15,7 +15,7 @@ import {
     Tooltip,
     Typography,
 } from 'antd';
-import { EditOutlined, EyeOutlined, SearchOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import PanelLayout from '../../../Layouts/PanelLayout';
 import PageHeader from '@/Components/PageHeader';
@@ -94,10 +94,12 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
 
     const columns = [
         {
+            // El código es el identificador visible (ADR-020); el enlace sigue
+            // yendo por id, que es la clave técnica (ADR-020 §18).
             title: t('order.order_number'),
-            dataIndex: 'id',
-            width: 90,
-            render: (id) => <Link href={`/pedidos/${id}`}>{`#${id}`}</Link>,
+            dataIndex: 'code',
+            width: 140,
+            render: (code, row) => <Link href={`/pedidos/${row.id}`}>{code || '-'}</Link>,
         },
         {
             title: t('order.order_date'),
@@ -129,7 +131,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
                     {row.driver?.name || '-'}
                     <div>
                         <Typography.Text type="secondary">
-                            {`T: ${row.tanker?.license_plate || '-'} · Tr: ${row.tractor?.license_plate || '-'}`}
+                            {`T: ${row.tanker?.license_plate || '-'} · Tr: ${row.tractor_plate || '-'}`}
                         </Typography.Text>
                     </div>
                 </div>
@@ -194,7 +196,18 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
 
     return (
         <PanelLayout>
-            <PageHeader title={t('menus.orders')} />
+            <PageHeader
+                title={t('menus.orders')}
+                extra={
+                    // Alta manual (ADR-025): el pedido queda con origen `panel`
+                    // y con `created_by` = este usuario.
+                    <Link href={Orders.routes.create}>
+                        <Button type="primary" icon={<PlusOutlined />}>
+                            {t('order.new_order')}
+                        </Button>
+                    </Link>
+                }
+            />
             <div className="ui-list-section">
                 <Space wrap style={{ marginBottom: 16, width: '100%' }}>
                     <Input
@@ -271,7 +284,7 @@ export default function OrdersIndex({ orders, filter, statuses, advisors }) {
             <Drawer
                 title={
                     selectedId
-                        ? `${t('order.order_number')} #${selectedId}`
+                        ? `${t('order.order')} ${inspection?.order?.code || selectedId}`
                         : t('order.order_detail')
                 }
                 size="min(100%, 560px)"

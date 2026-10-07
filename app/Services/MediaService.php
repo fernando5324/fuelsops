@@ -62,13 +62,28 @@ class MediaService
     }
 
     /**
-     * Elimina un archivo: borra el físico del disco y aplica baja lógica al
-     * registro (is_deleted). Solo debe llamarse con archivos de la propia
+     * Elimina un archivo: aplica baja lógica al registro (is_deleted) y borra
+     * el físico del disco SOLO si ninguna otra fila activa lo referencia. El
+     * nombre físico es el sha256 del contenido, así que reemplazar un archivo
+     * por otro con los mismos bytes crea una segunda fila sobre la misma ruta
+     * y, sin esta guarda, destruir la fila anterior borraría el archivo que la
+     * nueva sigue usando. Solo debe llamarse con archivos de la propia
      * organización (los global scopes ya aíslan el tenant).
      */
     public function destroy(MediaFile $file): void
     {
-        Storage::disk($file->disk)->delete($file->path());
+        $shared = MediaFile::query()
+            ->where('disk', $file->disk)
+            ->where('directory', $file->directory)
+            ->where('file_name', $file->file_name)
+            ->where('id', '!=', $file->id)
+            ->where('is_deleted', 0)
+            ->exists();
+
+        if (! $shared) {
+            Storage::disk($file->disk)->delete($file->path());
+        }
+
         $file->delete();
     }
 

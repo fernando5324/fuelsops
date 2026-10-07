@@ -21,6 +21,7 @@ use App\Http\Controllers\Platform\Pricing\PriceApiController;
 use App\Http\Controllers\Platform\Pricing\PriceController;
 use App\Http\Controllers\Platform\Pricing\PriceImportController;
 use App\Http\Controllers\Platform\Reports\SalesReportController;
+use App\Http\Controllers\Platform\Settings\SettingsController;
 use App\Http\Controllers\Platform\Users\UserApiController;
 use App\Http\Controllers\Platform\Users\UserController;
 use App\Http\Controllers\Platform\Vehicles\VehicleApiController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Platform\Vehicles\VehicleController;
 use App\Http\Controllers\Platform\Wholesalers\WholesalerApiController;
 use App\Http\Controllers\Platform\Wholesalers\WholesalerController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Public\BrandController as PublicBrandController;
 use App\Http\Controllers\Public\OrderController as PublicOrderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -67,6 +69,10 @@ Route::prefix('orders')->name('orders.')->group(function () {
         ->name('vehicle-lookup');
 });
 
+// Logo de la organización en línea (ADR-026). Pública: el header público y
+// las páginas sin sesión también pintan `brand.logo`.
+Route::get('/brand/logo', [PublicBrandController::class, 'logo'])->name('brand.logo');
+
 Route::middleware('auth')->group(function () {
     Route::get('/panel', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -77,6 +83,12 @@ Route::middleware('auth')->group(function () {
     // para que "papelera" no se interprete como id de pedido.
     Route::get('/pedidos/papelera', [TrashController::class, 'index'])->name('pedidos.papelera.index');
     Route::get('/pedidos/papelera/{order}', [TrashController::class, 'show'])->name('pedidos.papelera.show');
+
+    // Alta manual de pedidos (ADR-025). El formulario vive en "nuevo", así que
+    // también debe declararse ANTES de /pedidos/{order} para que "nuevo" no se
+    // interprete como id de pedido.
+    Route::get('/pedidos/nuevo', [OrderController::class, 'create'])->name('pedidos.create');
+    Route::post('/pedidos', [OrderController::class, 'store'])->name('pedidos.store');
 
     Route::get('/pedidos/{order}', [OrderController::class, 'show'])->name('pedidos.show');
     Route::get('/pedidos/{order}/editar', [OrderController::class, 'edit'])->name('pedidos.edit');
@@ -124,6 +136,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Configuración de empresa y sistema (ADR-026). Vistas en español; el
+    // guardado vive en la API /api/settings/* (sección inferior).
+    Route::get('/configuracion/compania', [SettingsController::class, 'company'])->name('configuracion.company');
+    Route::get('/configuracion/sistema', [SettingsController::class, 'system'])->name('configuracion.system');
+
     // Archivos adjuntos (acceso autorizado)
     Route::get('/media/{mediaFile}/download', [MediaController::class, 'download'])->name('media.download');
 
@@ -169,6 +186,8 @@ Route::middleware('auth')->group(function () {
         Route::post('vehicles', [VehicleApiController::class, 'store'])->name('vehicles.store');
         Route::put('vehicles/{vehicle}', [VehicleApiController::class, 'update'])->name('vehicles.update');
         Route::delete('vehicles/{vehicle}', [VehicleApiController::class, 'destroy'])->name('vehicles.destroy');
+        Route::get('vehicles/{vehicle}/compartments', [VehicleApiController::class, 'compartments'])->name('vehicles.compartments');
+        Route::put('vehicles/{vehicle}/compartments', [VehicleApiController::class, 'saveCompartments'])->name('vehicles.compartments.save');
 
         Route::post('order-statuses', [OrderStatusApiController::class, 'store'])->name('order-statuses.store');
         Route::put('order-statuses/{order_status}', [OrderStatusApiController::class, 'update'])->name('order-statuses.update');
@@ -187,6 +206,11 @@ Route::middleware('auth')->group(function () {
         Route::put('pricing/relations/{plant_product}', [PriceApiController::class, 'updateRelation'])->name('pricing.relations.update');
         Route::delete('pricing/relations/{plant_product}', [PriceApiController::class, 'destroyRelation'])->name('pricing.relations.destroy');
         Route::get('pricing/relations/{plant_product}/history', [PriceApiController::class, 'history'])->name('pricing.relations.history');
+
+        // Configuración (ADR-026). El de empresa llega como POST multipart +
+        // _method=PUT (PHP no puebla $_POST/$_FILES en PUT multipart).
+        Route::put('settings/company', [SettingsController::class, 'updateCompany'])->name('settings.company');
+        Route::put('settings/system', [SettingsController::class, 'updateSystem'])->name('settings.system');
     });
 });
 

@@ -6,6 +6,7 @@ use App\Models\Concerns\Auditable;
 use App\Models\Concerns\LogicalDelete;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Organización (tenant) que aísla la información del sistema.
@@ -47,5 +48,14 @@ class Tenant extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'tenant_id');
+    }
+
+    /**
+     * Configuración operativa de la organización (ADR-021): 1:1 con el tenant.
+     * De ella sale el formato del código de pedido (ADR-020).
+     */
+    public function settings(): HasOne
+    {
+        return $this->hasOne(TenantSetting::class, 'tenant_id');
     }
 }

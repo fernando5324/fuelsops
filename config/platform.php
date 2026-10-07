@@ -47,6 +47,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Código de pedido (ADR-020 / ADR-021)
+    |--------------------------------------------------------------------------
+    |
+    | Valores por defecto de la PLATAFORMA para el código de pedido. Sirven al
+    | crear la fila de `tenant_settings` de una organización nueva: a partir de
+    | ahí el prefijo, el número inicial y el relleno son de cada entidad.
+    |
+    | El avance de la secuencia NO vive aquí ni en tenant_settings: lo lleva
+    | `order_code_counters.last_number`, porque el código es editable y el
+    | siguiente número no se deduce del anterior (ADR-020 §12).
+    |
+    */
+
+    'order_code' => [
+        'prefix' => (string) env('PLATFORM_ORDER_CODE_PREFIX', 'PED'),
+        'start' => (int) env('PLATFORM_ORDER_CODE_START', 1),
+        'padding' => (int) env('PLATFORM_ORDER_CODE_PAD', 6),
+        'max_length' => 50,
+        'charset' => 'A-Z0-9.-',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Chromium para la exportación de PDF (ADR-018 §3/§24)
     |--------------------------------------------------------------------------
     |

@@ -18,6 +18,8 @@ return [
     'pricing_import' => 'Importar de Excel',
     'profile' => 'Perfil',
     'settings' => 'Configuración',
+    'company' => 'Empresa',
+    'system' => 'Sistema',
     'reports' => 'Reportes',
     'sales_report' => 'Avance de ventas',
     'quick_access' => 'Accesos rápidos',

@@ -55,11 +55,12 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
     const [customerStatus, setCustomerStatus] = useState('idle');
     const [driverStatus, setDriverStatus] = useState('idle');
     const [tankerStatus, setTankerStatus] = useState('idle');
-    const [tractorStatus, setTractorStatus] = useState('idle');
+    // Detalle de lo que el autocompletado trayó (placa del tracto, cantidad de
+    // compartimentos) para poder decirlo en el aviso de "cisterna encontrada".
+    const [tankerHint, setTankerHint] = useState('');
     const customerTimer = useRef(null);
     const driverTimer = useRef(null);
     const tankerTimer = useRef(null);
-    const tractorTimer = useRef(null);
     const { message } = App.useApp();
     const { errors } = usePage().props;
     const { t } = useTranslations();
@@ -79,7 +80,6 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
             clearTimeout(customerTimer.current);
             clearTimeout(driverTimer.current);
             clearTimeout(tankerTimer.current);
-            clearTimeout(tractorTimer.current);
         },
         [],
     );
@@ -219,36 +219,83 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
         driverTimer.current = setTimeout(() => runDriverLookup(value), 500);
     };
 
-    const runVehicleLookup = async (rawPlate, type) => {
+    // ADR-023: la cisterna es la única entidad de vehículos. Al escribir su placa
+// el servidor devuelve la placa del tracto que tiene hoy y la plantilla de sus
+// compartimentos, así que aquí se completan solos (ambos campos siguen siendo
+// editables: es una ayuda, no un imposedor).
+const runVehicleLookup = async (rawPlate) => {
         const plate = (rawPlate || '').trim().toUpperCase();
-        const setStatus = type === 'TANKER' ? setTankerStatus : setTractorStatus;
         if (plate.length < 3) {
-            setStatus('idle');
+            setTankerStatus('idle');
+            setTankerHint('');
             return;
         }
 
         try {
-            const { data } = await Orders.lookupVehicle(plate, type);
+            const { data } = await Orders.lookupVehicle(plate);
+            setTankerStatus(data.found ? 'found' : 'not_found');
 
-            setStatus(data.found ? 'found' : 'not_found');
-        } catch (e) {
-            setStatus('idle');
+            if (!data.found) {
+                setTankerHint('');
+                return;
+            }
+
+            const patches = {};
+            const hints = [];
+
+            if (data.tractor_plate) {
+                patches.tractor_plate = data.tractor_plate;
+                hints.push(t('order.vehicle_found_tractor'));
+            }
+
+            if (Array.isArray(data.compartments) && data.compartments.length > 0) {
+                const template = data.compartments;
+
+                patches.compartment_count = template.length;
+                hints.push(t('order.vehicle_found_compartments', { count: template.length }));
+
+            const current = form.getFieldValue('compartments');
+            const rows = Array.isArray(current) ? current : [];
+
+            patches.compartments = template.map((compartment, index) => {
+                const volume = Number(compartment.volume);
+                const existing = rows[index];
+
+                // La plantilla solo trae volumen y SCOP; el producto y el SCOP
+                // de la fila los fija la línea del detalle que elija el usuario.
+                // Se respetan los valores ya capturados en la fila.
+                const match = updates.findIndex(
+                    (detail) => compartment.scop && detail?.scop === compartment.scop,
+                );
+
+                return {
+                    detail_key: existing?.detail_key ?? (match >= 0 ? match : null),
+                    product_id:
+                        existing?.product_id ?? (match >= 0 ? updates[match]?.product_id ?? null : null),
+                    scop: existing?.scop ?? (match >= 0 ? updates[match]?.scop ?? '' : ''),
+                    volume: existing?.volume ?? (volume > 0 ? volume : null),
+                };
+            });
         }
-    };
 
-    const onTankerChange = (e) => {
-        const value = e.target.value;
+        if (Object.keys(patches).length > 0) {
+            form.setFieldsValue(patches);
+        }
+
+        setTankerHint(hints.join(' · '));
+    } catch (e) {
         setTankerStatus('idle');
-        clearTimeout(tankerTimer.current);
-        tankerTimer.current = setTimeout(() => runVehicleLookup(value, 'TANKER'), 500);
-    };
+        setTankerHint('');
+    }
+};
 
-    const onTractorChange = (e) => {
-        const value = e.target.value;
-        setTractorStatus('idle');
-        clearTimeout(tractorTimer.current);
-        tractorTimer.current = setTimeout(() => runVehicleLookup(value, 'TRACTOR'), 500);
-    };
+const onTankerChange = (e) => {
+    const value = e.target.value;
+    setTankerStatus('idle');
+    setTankerHint('');
+    clearTimeout(tankerTimer.current);
+    tankerTimer.current = setTimeout(() => runVehicleLookup(value), 500);
+};
 
     const hasErrors = errors && Object.keys(errors).length > 0;
 
@@ -261,7 +308,7 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
         data.append('driver[license_number]', values.driver?.license_number ?? '');
         data.append('driver[name]', values.driver?.name ?? '');
         data.append('tanker[license_plate]', values.tanker?.license_plate ?? '');
-        data.append('tractor[license_plate]', values.tractor?.license_plate ?? '');
+        data.append('tractor_plate', values.tractor_plate ?? '');
 
         if (values.notes) {
             data.append('notes', values.notes);
@@ -321,7 +368,12 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                                     label={t('order.order_date')}
                                     initialValue={dayjs()}
                                 >
-                                    <DatePicker style={{ width: '100%' }} format={dateFormat()} />
+                                    {/* No se puede registrar un pedido con fecha pasada: es la misma regla que valida el backend (`after_or_equal:today` en PublicOrderStoreRequest). */}
+                                    <DatePicker
+                                        style={{ width: '100%' }}
+                                        format={dateFormat()}
+                                        disabledDate={(current) => current && current < dayjs().startOf('day')}
+                                    />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} sm={12}>
@@ -434,35 +486,31 @@ export default function PublicOrderCreate({ advisors, plants, wholesalers, produ
                                         tankerStatus === 'found' ? (
                                             <Text className="ui-ok">
                                                 <CheckCircleOutlined /> {t('order.vehicle_found')}
+                                                {tankerHint ? ` · ${tankerHint}` : ''}
                                             </Text>
                                         ) : null
                                     }
                                 >
                                     <Input
                                         maxLength={20}
+                                        placeholder={t('order.tanker_plate')}
                                         onChange={onTankerChange}
-                                        onBlur={(e) => runVehicleLookup(e.target.value, 'TANKER')}
+                                        onBlur={(e) => runVehicleLookup(e.target.value)}
                                     />
                                 </Form.Item>
                             </Col>
                             <Col xs={24} sm={12}>
                                 <Form.Item
-                                    name={['tractor', 'license_plate']}
+                                    name="tractor_plate"
                                     label={t('order.tractor_plate')}
                                     rules={[{ required: true, message: `${t('order.tractor_plate')} ${t('common.required')}` }]}
                                     extra={
-                                        tractorStatus === 'found' ? (
-                                            <Text className="ui-ok">
-                                                <CheckCircleOutlined /> {t('order.vehicle_found')}
-                                            </Text>
-                                        ) : null
+                                        <Text type="secondary" className="ui-hint">
+                                            {t('order.tractor_plate_hint')}
+                                        </Text>
                                     }
                                 >
-                                    <Input
-                                        maxLength={20}
-                                        onChange={onTractorChange}
-                                        onBlur={(e) => runVehicleLookup(e.target.value, 'TRACTOR')}
-                                    />
+                                    <Input maxLength={20} placeholder={t('order.tractor_plate')} />
                                 </Form.Item>
                             </Col>
                         </Row>

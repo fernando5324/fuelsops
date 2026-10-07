@@ -62,4 +62,6 @@ createInertiaApp({
         // opción se evalúa antes de montar React.
         color: cssColor('--color-primary') || FALLBACK_BRAND.colors.primary,
     },
+},{ cluster: true }).then(() => {
+    document.getElementById('app').removeAttribute('data-page');
 });

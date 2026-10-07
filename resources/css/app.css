@@ -806,6 +806,19 @@ body {
     font-size: 13px;
 }
 
+/* --- Plantilla de compartimentos de la cisterna (vehículos) --- */
+.ui-compartments-list .ant-form-item {
+    margin-bottom: 0;
+}
+
+.ui-compartment-num {
+    color: var(--color-muted);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    padding-right: 4px;
+}
+
 /* Aviso de "solo lectura" de un bloque del detalle en la papelera. */
 .ui-order-readonly-note {
     margin: 0 0 12px;

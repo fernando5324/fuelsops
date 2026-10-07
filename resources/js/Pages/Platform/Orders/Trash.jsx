@@ -44,11 +44,12 @@ export default function OrdersTrash({ orders, filter }) {
 
     const columns = [
         {
+            // El pedido en papelera conserva su código (ADR-020/ADR-011).
             title: t('order.order_number'),
-            dataIndex: 'id',
-            width: 120,
-            render: (id) => (
-                <Link href={Orders.routes.trashShow(id)} className="ui-trash-link">{`#${id}`}</Link>
+            dataIndex: 'code',
+            width: 140,
+            render: (code, row) => (
+                <Link href={Orders.routes.trashShow(row.id)} className="ui-trash-link">{code || '-'}</Link>
             ),
         },
         {

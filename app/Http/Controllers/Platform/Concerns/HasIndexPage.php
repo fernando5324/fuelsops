@@ -58,7 +58,10 @@ trait HasIndexPage
         $filter = ['q' => $q];
 
         foreach ($this->filters as $field) {
-            $key = $field['key'];
+            $key = data_get($field, 'key');
+            if ($key === null || $key === '') {
+                continue;
+            }
             $value = $request->query($key);
 
             if ($value !== null && $value !== '') {
@@ -73,9 +76,9 @@ trait HasIndexPage
             'config' => [
                 'resource' => $this->resource,
                 'url' => $this->pageUrl(),
-                'title' => __($this->titleKey),
-                'fields' => $this->fields,
-                'filters' => $this->filters,
+                'title' => isset($this->titleKey) ? __($this->titleKey) : ($this->resource ?? ''),
+                'fields' => $this->fields ?? [],
+                'filters' => $this->filters ?? [],
                 'options' => $this->options(),
                 'showAudit' => $this->showAudit(),
             ],

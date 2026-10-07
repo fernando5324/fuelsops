@@ -96,7 +96,7 @@ export default function PublicOrderConfirmed({ order, totals }) {
                     <Typography.Paragraph type="secondary">
                         {t('order.confirmed_subtitle')}
                     </Typography.Paragraph>
-                    <Tag color="blue">{`${t('order.order_number')} #${order?.id}`}</Tag>
+                    <Tag color="blue">{`${t('order.order_number')}: ${order?.code || '-'}`}</Tag>
                 </div>
 
                 <SectionCard
@@ -150,7 +150,7 @@ export default function PublicOrderConfirmed({ order, totals }) {
                             {order?.tanker?.license_plate || '-'}
                         </Descriptions.Item>
                         <Descriptions.Item label={t('order.tractor_plate')}>
-                            {order?.tractor?.license_plate || '-'}
+                            {order?.tractor_plate || '-'}
                         </Descriptions.Item>
                     </Descriptions>
                 </SectionCard>

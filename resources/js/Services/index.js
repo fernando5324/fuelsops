@@ -24,7 +24,6 @@ export const catalogServices = {
     products: Products,
     customers: Customers,
     drivers: Drivers,
-    vehicles: Vehicles,
     estados: OrderStatuses,
     users: Users,
 };

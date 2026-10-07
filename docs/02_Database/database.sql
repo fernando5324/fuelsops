@@ -377,13 +377,23 @@ CREATE TABLE IF NOT EXISTS drivers (
 
 -- 7. VEHICLES
 
+-- 7. VEHICLES (cisternas)
+
+-- Una fila es una CISTERNA con sus dos placas: la de la cisterna y la del
+-- tracto que la mueve (ADR-023). Antes el tracto era una fila aparte
+-- distinguished por `type`, lo que obligaba a duplicar la placa en dos
+-- entidades; ahora el tracto es un valor al mismo nivel que la cisterna, y
+-- puede coincidir con ella.
+--
+-- `tractor_plate` es el dato vigente del parque. El histórico de cada pedido se
+-- conserva en `orders.tractor_plate` (snapshot del día).
+
 CREATE TABLE IF NOT EXISTS vehicles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
 
-    license_plate VARCHAR(20) NOT NULL,
-
-    type ENUM('TANKER', 'TRACTOR') NOT NULL,
+    license_plate VARCHAR(20) NOT NULL COMMENT 'Placa de la cisterna',
+    tractor_plate VARCHAR(20) NULL COMMENT 'Placa del tracto asociado (puede ser igual a license_plate)',
 
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -393,9 +403,8 @@ CREATE TABLE IF NOT EXISTS vehicles (
     created_by BIGINT UNSIGNED NOT NULL,
     updated_by BIGINT UNSIGNED NULL,
 
-    UNIQUE KEY uq_vehicles_tenant_plate_type (tenant_id, license_plate, type),
+    UNIQUE KEY uq_vehicles_tenant_plate (tenant_id, license_plate),
 
-    INDEX idx_vehicles_type (type),
     INDEX idx_vehicles_tenant (tenant_id),
     INDEX idx_vehicles_active (is_active),
     INDEX idx_vehicles_created_by (created_by),
@@ -472,6 +481,22 @@ CREATE TABLE IF NOT EXISTS orders (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NOT NULL,
 
+    -- Código operativo visible para el usuario (ADR-020). Es independiente del
+    -- id interno (que sigue siendo la clave técnica de URLs, relaciones y
+    -- adjuntos), es editable desde el panel y único SOLO dentro del tenant:
+    -- UNIQUE (tenant_id, code). El prefijo y el relleno salen de
+    -- tenant_settings (ADR-021) y el número, de order_code_counters: nunca de
+    -- MAX(code), porque el código es editable y admite formatos heredados.
+    code VARCHAR(50) NOT NULL COMMENT 'Código operativo del pedido, único por tenant (ADR-020)',
+
+    -- Origen del registro (ADR-025): `public` = enviado por el cliente desde el
+    -- formulario web; `panel` = alta manual de un usuario del panel. Es
+    -- INDEPENDIENTE de `created_by`, que siempre guarda quién lo envió de verdad
+    -- (usuario sistema 999999 cuando el formulario web se usa sin sesión). La UI
+    -- usa esta columna para no atribuir al usuario principal un pedido del
+    -- cliente. No se modifica al editar el pedido y no se recycle.
+    source VARCHAR(20) NOT NULL DEFAULT 'panel' COMMENT 'Origen del registro: public (formulario web del cliente) | panel (alta manual) (ADR-025)',
+
     order_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora del pedido en America/Lima',
 
     status_id BIGINT UNSIGNED NOT NULL COMMENT 'Estado del pedido; por defecto: pendiente',
@@ -480,8 +505,8 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_id BIGINT UNSIGNED NOT NULL,
     driver_id BIGINT UNSIGNED NOT NULL,
 
-    tanker_id BIGINT UNSIGNED NOT NULL,
-    tractor_id BIGINT UNSIGNED NOT NULL,
+    tanker_id BIGINT UNSIGNED NOT NULL COMMENT 'Cisterna del pedido (fila de vehicles)',
+    tractor_plate VARCHAR(20) NULL COMMENT 'Snapshot de la placa de tracto usada ese día (ADR-023); el dato vigente vive en vehicles.tractor_plate',
 
     notes TEXT NULL,
 
@@ -494,12 +519,17 @@ CREATE TABLE IF NOT EXISTS orders (
 
     INDEX idx_orders_date (order_date),
     INDEX idx_orders_tenant (tenant_id),
+    -- Unicidad del código dentro de la organización (ADR-020 §4). NO incluye
+    -- is_deleted a propósito: el código de un pedido en papelera queda
+    -- reservado y no se recicla (el contador nunca reutiliza números). La
+    -- validación de duplicados al editar usa Rule::unique, que consulta sin
+    -- global scopes, así que también ve los pedidos dados de baja.
+    UNIQUE KEY uq_orders_tenant_code (tenant_id, code),
     INDEX idx_orders_status (status_id),
     INDEX idx_orders_advisor (advisor_id),
     INDEX idx_orders_customer (customer_id),
     INDEX idx_orders_driver (driver_id),
     INDEX idx_orders_tanker (tanker_id),
-    INDEX idx_orders_tractor (tractor_id),
     INDEX idx_orders_created_by (created_by),
     INDEX idx_orders_updated_by (updated_by),
 
@@ -529,12 +559,6 @@ CREATE TABLE IF NOT EXISTS orders (
 
     CONSTRAINT fk_orders_tanker
         FOREIGN KEY (tanker_id)
-        REFERENCES vehicles (id)
-        ON UPDATE CASCADE
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_orders_tractor
-        FOREIGN KEY (tractor_id)
         REFERENCES vehicles (id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
@@ -1240,7 +1264,7 @@ CREATE TABLE IF NOT EXISTS order_deposits (
         CHECK (amount > 0)
 ) ENGINE=InnoDB;
 
--- 21. ORDER COMPARTMENTS (ADR-015)
+-- 21. ORDER COMPARTMENTS (ADR-015,vehicle_id en ADR-023)
 --
 -- Distribución por compartimentos de la cisterna: qué producto, de qué línea del
 -- detalle y cuántos galones van en cada compartimento. Un pedido tiene N
@@ -1252,6 +1276,12 @@ CREATE TABLE IF NOT EXISTS order_deposits (
 -- `order_details`: la edición del pedido en el panel da de baja y recrea los
 -- detalles (§ update de OrderService), y una FK quedaría apuntando a filas
 -- borradas lógicamente.
+-- `vehicle_id` es la cisterna a la que se repartió la carga (ADR-023). Es
+-- redundante con `orders.tanker_id`, y a propósito: (a) hace directa la consulta
+-- "distribuciones de esta cisterna" que usa el autocompletado, (b) conserva la
+-- cisterna aunque algún día se corrigiera la del pedido, y (c) documenta en la
+-- propia fila dónde se repartió. El servidor lo escribe siempre desde la cisterna
+-- del pedido, nunca lo toma del formulario.
 -- La cantidad de compartimentos NO se persiste: es el número de filas
 -- (COUNT(*)), igual que el total de los depósitos se calcula en pantalla
 -- (ADR-013). El formulario la envía y se valida contra la cantidad de filas.
@@ -1264,13 +1294,15 @@ CREATE TABLE IF NOT EXISTS order_deposits (
 -- baja los previos y crea los nuevos.
 -- Sin índice único en (order_id, compartment_number): el scope global de
 -- LogicalDelete escondería la fila dada de baja y el INSERT chocaría con el
--- índice (mismo gotcha que plant_products). La unicidad la valida el request.
+-- índice (mismo gotcha que plant_products y que vehicle_compartments). La
+-- unicidad la valida el request.
 
 CREATE TABLE IF NOT EXISTS order_compartments (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     tenant_id BIGINT UNSIGNED NOT NULL,
     order_id BIGINT UNSIGNED NOT NULL,
+    vehicle_id BIGINT UNSIGNED NOT NULL COMMENT 'Cisterna (vehicles) a la que se repartió la carga',
 
     compartment_number TINYINT UNSIGNED NOT NULL COMMENT 'Numeración 1..N del compartimento',
     product_id BIGINT UNSIGNED NOT NULL COMMENT 'Producto de la línea del detalle asignada al compartimento',
@@ -1286,6 +1318,7 @@ CREATE TABLE IF NOT EXISTS order_compartments (
 
     INDEX idx_order_compartments_tenant (tenant_id),
     INDEX idx_order_compartments_order (order_id),
+    INDEX idx_order_compartments_vehicle (vehicle_id),
     INDEX idx_order_compartments_product (product_id),
     INDEX idx_order_compartments_created_by (created_by),
     INDEX idx_order_compartments_updated_by (updated_by),
@@ -1308,6 +1341,12 @@ CREATE TABLE IF NOT EXISTS order_compartments (
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
 
+    CONSTRAINT fk_order_compartments_vehicle
+        FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
     CONSTRAINT fk_order_compartments_created_by
         FOREIGN KEY (created_by)
         REFERENCES users (id)
@@ -1323,6 +1362,109 @@ CREATE TABLE IF NOT EXISTS order_compartments (
     CONSTRAINT chk_order_compartments_volume
         CHECK (volume > 0)
 ) ENGINE=InnoDB;
+
+
+-- 22. TENANT SETTINGS (ADR-021, ADR-026)
+
+-- Configuración operativa y de presentación de cada organización (1:1 con
+-- `tenants`, que conserva la identidad de la entidad: nombre comercial, RUC,
+-- correo, teléfono, logo, ver ADR-026). De esta tabla se usan hoy
+-- `order_code_prefix`, `order_code_start` y `order_code_padding` para
+-- generar el código del pedido (ADR-020), y el resto alimenta las páginas
+-- de Configuración (/configuracion/compania y /configuracion/sistema,
+-- ADR-026): descripción, dirección, horario, redes y preferencias
+-- (idioma/zona horaria).
+--
+-- `order_code_start` es el número DESDE el cual comienza la generación, no el
+-- contador: el avance real vive en `order_code_counters` (sección 23), porque
+-- el código es editable y no se puede deducir del anterior.
+--
+-- `is_deleted` se mantiene por convención del proyecto, pero conceptualmente
+-- esta tabla no se elimina: la configuración simplemente se actualiza. El
+-- UNIQUE (tenant_id) impide tener más de una fila por organización.
+
+CREATE TABLE IF NOT EXISTS tenant_settings (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    tenant_id BIGINT UNSIGNED NOT NULL,
+
+    organization_name VARCHAR(150) NOT NULL DEFAULT '' COMMENT 'Nombre comercial (espejo de tenants.name, ADR-026)',
+    n_document VARCHAR(30) NOT NULL DEFAULT '' COMMENT 'Número de documento (dato reservado, no se muestra)',
+
+    organization_description VARCHAR(500) NULL,
+
+    default_language VARCHAR(10) NOT NULL DEFAULT 'es',
+    timezone VARCHAR(100) NOT NULL DEFAULT 'America/Lima',
+
+    address TEXT NULL,
+
+    business_hours JSON NULL,
+    social_links JSON NULL,
+    branding JSON NULL,
+
+    order_code_prefix VARCHAR(20) NOT NULL DEFAULT 'PED' COMMENT 'Prefijo del código de pedido (ADR-020/021)',
+    order_code_start BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Número inicial de la secuencia de códigos',
+    order_code_padding SMALLINT UNSIGNED NOT NULL DEFAULT 6 COMMENT 'Dígitos de relleno del código (PED-000001)',
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by BIGINT UNSIGNED NULL,
+
+    updated_at TIMESTAMP NULL DEFAULT NULL
+        ON UPDATE CURRENT_TIMESTAMP,
+    updated_by BIGINT UNSIGNED NULL,
+
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+
+    UNIQUE KEY uk_tenant_settings_tenant (tenant_id),
+    INDEX idx_tenant_settings_created_by (created_by),
+    INDEX idx_tenant_settings_updated_by (updated_by),
+
+    CONSTRAINT fk_tenant_settings_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_tenant_settings_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_tenant_settings_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 23. ORDER CODE COUNTERS (ADR-020 §13)
+
+-- Secuencia independiente por organización para el código de pedido. Existe
+-- para NO depender de `MAX(code) + 1`: el código es editable y puede tener
+-- formatos distintos (ADR-020 §12), así que el siguiente número no se deduce
+-- del anterior.
+--
+-- `last_number` es el último número ENTREGADO (no el inicial de
+-- tenant_settings.order_code_start). Se incrementa con `lockForUpdate()` dentro
+-- de la transacción que crea el pedido; el índice único
+-- uq_orders_tenant_code queda como red de seguridad. Los números nunca se
+-- reciclan, tampoco para pedidos en papelera.
+--
+-- Tabla técnica (no de negocio): por eso no lleva `is_deleted`. Al dar de
+-- alta una entidad nueva se crea su fila con `last_number = 0` y el primer
+-- código usa `order_code_start` de su tenant_settings.
+
+CREATE TABLE IF NOT EXISTS order_code_counters (
+    tenant_id BIGINT UNSIGNED PRIMARY KEY,
+
+    last_number BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Último número de secuencia entregado a la organización',
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL
+        ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- PROVISIONAL ORDER CALCULATIONS
 --
@@ -1348,6 +1490,85 @@ CREATE TABLE IF NOT EXISTS order_compartments (
 -- gain = SUM(detail_margin_amount)                         (total del pedido)
 -- total_purchase sigue siendo SUM(gallons * precio de compra de la celda
 -- winner de wholesaler_prices) y se muestra aparte en el resumen financiero.
+
+
+-- 24. VEHICLE COMPARTMENTS (ADR-023)
+--
+-- Plantilla de cámaras de cada cisterna: cuántas tiene y qué volumen (Volumen
+-- Gas) maneja cada una. Es la fuente del autocompletado del formulario público
+-- y de la edición del pedido: al escribir la placa de una cisterna ya
+-- registrada, se dibujan sus compartimentos con el volumen precargado y el
+-- usuario lo ajusta si la carga es distinta.
+--
+-- Es MAESTRA del vehículo, no del pedido: lo que se cargó cada día vive en
+-- `order_compartments` (§21). Aquí va "cómo es la cisterna"; allí "cuánto se
+-- puso en cada cámara ese día".
+--
+-- La crea el primer pedido que declara la distribución de esa cisterna y la
+-- reconcilia cada alta o edición posterior con lo que el usuario declaró
+-- (última realidad gana). NO tiene interfaz propia todavía: se administra a
+-- través del formulario público.
+--
+-- `scop` es opcional a propósito (una cámara puede llevar cualquier producto):
+-- cuando viene informado sirve para enlazar sola la fila con la línea del
+-- detalle que coincide.
+--
+-- Sin índice único en (vehicle_id, compartment_number): la reconciliación da de
+-- baja las filas que sobran y el scope global de `LogicalDelete` escondería la
+-- dada de baja, así que un índice único haría chocar el INSERT (mismo gotcha que
+-- `order_compartments` y `plant_products`).
+
+CREATE TABLE IF NOT EXISTS vehicle_compartments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    vehicle_id BIGINT UNSIGNED NOT NULL COMMENT 'Cisterna (fila de vehicles) a la que pertenece la cámara',
+
+    compartment_number TINYINT UNSIGNED NOT NULL COMMENT 'Numeración 1..N de la cámara dentro de la cisterna',
+    scop VARCHAR(50) NULL COMMENT 'SCOP que suele cargar la cámara; NULL si sirve para cualquiera',
+    volume DECIMAL(12,2) NOT NULL COMMENT 'Volumen en galones (Volumen Gas) de la cámara',
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL DEFAULT NULL COMMENT 'Fecha y hora del registro en America/Lima',
+    created_by BIGINT UNSIGNED NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+
+    INDEX idx_vehicle_compartments_tenant (tenant_id),
+    INDEX idx_vehicle_compartments_vehicle (vehicle_id),
+    INDEX idx_vehicle_compartments_created_by (created_by),
+    INDEX idx_vehicle_compartments_updated_by (updated_by),
+
+    CONSTRAINT fk_vehicle_compartments_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_vehicle_compartments_vehicle
+        FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_vehicle_compartments_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_vehicle_compartments_updated_by
+        FOREIGN KEY (updated_by)
+        REFERENCES users (id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_vehicle_compartments_volume
+        CHECK (volume > 0)
+) ENGINE=InnoDB;
 
 
 -- SEEDS

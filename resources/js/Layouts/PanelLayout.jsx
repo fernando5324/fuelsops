@@ -17,6 +17,7 @@ import {
     HomeOutlined,
     MoneyCollectOutlined,
     BarChartOutlined,
+    SettingOutlined,
     MenuOutlined,
 } from '@ant-design/icons';
 import useTranslations from '@/hooks/useTranslations';
@@ -104,6 +105,27 @@ export default function PanelLayout({ children }) {
                 },
             ],
         },
+        // Configuración (ADR-026): solo el dueño de la organización ve y
+        // edita la configuración (el backend responde 403 al resto).
+        ...(user?.is_owner
+            ? [
+                  {
+                      key: 'configuracion',
+                      icon: <SettingOutlined />,
+                      label: t('menus.settings'),
+                      children: [
+                          {
+                              key: 'config-compania',
+                              label: <Link href="/configuracion/compania">{t('menus.company')}</Link>,
+                          },
+                          {
+                              key: 'config-sistema',
+                              label: <Link href="/configuracion/sistema">{t('menus.system')}</Link>,
+                          },
+                      ],
+                  },
+              ]
+            : []),
     ];
 
     let selectedKey = 'dashboard';
@@ -121,9 +143,13 @@ export default function PanelLayout({ children }) {
         selectedKey = 'precios-admin';
     } else if (path.startsWith('/reportes')) {
         selectedKey = 'reportes-ventas';
+    } else if (path.startsWith('/configuracion/sistema')) {
+        selectedKey = 'config-sistema';
+    } else if (path.startsWith('/configuracion')) {
+        selectedKey = 'config-compania';
     }
 
-    const [openKeys, setOpenKeys] = useState(['catalogos', path.startsWith('/pedidos') ? 'pedidos' : null, path.startsWith('/precios') ? 'precios' : null, path.startsWith('/reportes') ? 'reportes' : null].filter(Boolean));
+    const [openKeys, setOpenKeys] = useState(['catalogos', path.startsWith('/pedidos') ? 'pedidos' : null, path.startsWith('/precios') ? 'precios' : null, path.startsWith('/reportes') ? 'reportes' : null, path.startsWith('/configuracion') ? 'configuracion' : null].filter(Boolean));
 
     useEffect(() => {
         setOpenKeys((prev) => {
@@ -131,6 +157,7 @@ export default function PanelLayout({ children }) {
             if (path.startsWith('/pedidos')) next.add('pedidos');
             if (path.startsWith('/precios')) next.add('precios');
             if (path.startsWith('/reportes')) next.add('reportes');
+            if (path.startsWith('/configuracion')) next.add('configuracion');
             return [...next];
         });
     }, [path]);

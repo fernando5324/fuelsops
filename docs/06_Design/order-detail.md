@@ -1296,3 +1296,135 @@ Así consigues tres niveles muy claros:
 Listado → Vista rápida → Detalle completo / Edición
 
 Eso además encaja muy bien con la arquitectura que acabamos de definir en el ADR-003: el listado y el drawer pueden obtener información dinámica mediante Services cuando sea necesario, mientras que Ver, Editar, guardar cambios y las acciones principales pueden seguir utilizando Inertia.
+
+## 33. Código del pedido (ADR-020) aplicado a esta pantalla
+
+Esta sección documenta cómo el diseño de este documento se relaciona con el código operativo del pedido, que es lo que el usuario ve en lugar del id interno.
+
+### 33.1 Principio
+
+`orders.id` es la clave técnica (URLs, relaciones, adjuntos, historial) y **no se muestra**. El usuario ve `orders.code`, que pertenece a la organización, es editable y es único dentro de ella.
+
+El documento de diseño usaba `#39` como número de pedido; a partir de ADR-020 ese lugar lo ocupa `PED-000039`. El `#` desaparece de todas las pantallas de pedidos.
+
+### 33.2 Dónde aparece el código
+
+| Nivel | Componente | Texto |
+|---|---|---|
+| Listado | `Pages/Platform/Orders/Index.jsx` | columna "Número de pedido" con el `code`; el enlace sigue yendo a `/pedidos/{id}` |
+| Vista rápida (drawer) | `Components/Orders/OrderPreview.jsx` + título del drawer | `Pedido PED-000039` |
+| Detalle | `Components/Orders/OrderHeader.jsx` | `Pedido PED-000039` (era `Número de pedido #39`) |
+| Detalle en papelera | `Show.jsx` con `readOnly` | `Papelera PED-000039` |
+| Edición | `Pages/Platform/Orders/Edit.jsx` | título + campo editable en la sección 1 |
+| Papelera (listado) | `Pages/Platform/Orders/Trash.jsx` | columna con el `code` |
+| Dashboard | `Pages/Platform/Dashboard.jsx` | pedidos recientes |
+| Confirmación pública | `Pages/Public/Orders/Confirmed.jsx` | `Número de pedido: PED-000039` |
+
+El `OrderStatusHistory`, los `OrderItems`, los depósitos y los documentos **no** muestran el código: son secciones de contenido dentro de una pantalla que ya lo tiene en el encabezado.
+
+### 33.3 El campo de edición
+
+En la sección 1 (Información general), el código va en la primera columna y la fecha en la segunda:
+
+- `Input` de texto con `maxLength={50}` y placeholder `PED-000001`.
+- pista bajo el campo: *"Identificador visible del pedido. Es editable y debe ser único dentro de esta organización."*
+- mientras se escribe se normaliza en pantalla a mayúsculas y sin espacios (el backend vuelve a normalizar en `prepareForValidation`, que es la fuente de verdad).
+- reglas del formulario (espejo de las del backend): obligatorio y patrón `^[A-Z0-9][A-Z0-9.-]*$`. El backend añade la unicidad por tenant con su mensaje propio.
+- el formulario **público** no tiene este campo: el código se autogenera y aparece en la página de confirmación.
+
+### 33.4 Lo que no cambia
+
+- Las URLs siguen siendo `/pedidos/{id}`: no se navega por código.
+- El drawer del listado y `OrderInspection`/componentes siguen leyéndolo por `id`.
+- Los ejemplos de este documento que muestran `#39` describen la intención original del diseño; en la interfaz el identificador visible es siempre el código.
+
+## 34. Alta manual de pedidos y origen del registro (ADR-025)
+
+Esta sección documenta cómo el diseño del detalle se amplía con una segunda
+puerta de entrada —el alta manual desde el panel— y con la acreditación del
+origen del registro.
+
+### 34.1 Por qué hace falta
+
+El diseño original (y las Fases A y B) asumían que todo pedido nacía en el
+formulario web. En la operación real hay pedidos que **no** pasan por ahí:
+llamadas, WhatsApp, un cliente que no puede usar el formulario. Esos pedidos se
+anotaban fuera del sistema y se volvieron a digitar, con el riesgo de que jamás
+llegaran a registrarse.
+
+El panel queda así con una acción nueva en el listado:
+
+```
+[ + Nuevo pedido ]   →   GET /pedidos/nuevo   →   Platform/Orders/Edit (order = null)
+```
+
+### 34.2 Un solo formulario, dos modos
+
+El formulario de la Fase B se convierte en **dual**: `Edit.jsx` deriva el modo de
+la prop `order` (`const isCreate = !order`). Las secciones son exactamente las
+mismas del diseño, sin una pantalla gemela que se desactualice:
+
+| Sección | Alta manual | Edición |
+|---|---|---|
+| 1. Información general | ✅ (sin el campo de código) | ✅ (código editable) |
+| 2. Datos del chofer | ✅ (find-or-create por licencia) | ✅ |
+| 3. Datos del vehículo | ✅ (cisterna por placa + placa de tracto) | ✅ |
+| 4. Detalle del pedido | ✅ | ✅ |
+| 5. Distribución por compartimentos | ✅ | ✅ |
+| 6. Observaciones y documentos | ✅ | ✅ (con baja de documentos existentes) |
+
+Única diferencia de contrato: en el alta **no** se pide `code` (lo genera la
+secuencia por organización, ver §33) y **no** existe `remove_files`, porque no
+hay documentos previos. La fecha del pedido, en cambio, **sí** admite pasado en
+el alta manual: quien registra está transcribiendo un pedido que ya ocurrió (el
+formulario público sí exige el día de hoy).
+
+### 34.3 Botones
+
+| Contexto | Botón | Comportamiento |
+|---|---|---|
+| Listado | `+ Nuevo pedido` | entra al formulario en modo alta |
+| Formulario en alta | `Registrar pedido` | `POST /pedidos` y, al guardar, pasa a la **ficha** (no se queda en un formulario "recién creado") |
+| Formulario en edición | `Guardar cambios` | `PUT /pedidos/{id}` y vuelve a la ficha |
+
+El flash de confirmación es `order.created_ok` ("Pedido registrado
+correctamente."), distinto del `order.updated_ok` de la edición.
+
+### 34.4 La cabecera acredita el origen y la última modificación
+
+La cabecera del detalle (`OrderHeader.jsx`) lleva, bajo el código, una línea de
+procedencia. Es el lugar donde el usuario necesita saber quién pidió el pedido,
+porque el panel lo muestra a personal que habla con clientes todos los días:
+
+```
+Pedido PED-000039
+Registrado por el cliente (formulario web)          ← source = public
+```
+
+```
+Pedido PED-000039
+Creado por: Juan Pérez · Actualizado por: Ana Ruiz · 04/10/2026 09:15:00
+```
+
+Reglas de la línea:
+
+- `source = 'public'` → "Registrado por el cliente (formulario web)". El cliente
+  es quien pidió el pedido, aunque lo haya enviado un usuario del panel con
+  sesión abierta (**el origen no es el autor de la acción**).
+- `source = 'panel'` → "Creado por: {nombre}" (`created_by`).
+- El bloque "Actualizado por" **solo aparece si el pedido fue editado alguna
+  vez**: `updated_by` es `NULL` mientras nadie lo toque, y en ese caso no se
+  inventa una fecha de modificación que no ocurrió.
+- La línea se lee igual en la versión de papelera (`Show.jsx` con `readOnly`).
+
+### 34.5 Qué no cambia
+
+- La pantalla de detalle sigue siendo de **solo lectura** en su modo consulta.
+- La validación de un pedido creado a mano es la misma que la de cualquier
+  edición: catálogos de la organización, compartimentos anclados al detalle,
+  adjuntos PDF/JPEG.
+- El pedido creado desde el panel entra en la papelera y se restaura con las
+  mismas reglas de siempre (ADR-011), y su snapshot incluye el origen.
+- El listado, el drawer de vista previa y la confirmación pública no agregan
+  columnas nuevas: el origen se lee en la ficha, que es donde se consulta el
+  detalle completo.

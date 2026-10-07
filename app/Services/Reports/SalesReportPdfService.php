@@ -2,8 +2,10 @@
 
 namespace App\Services\Reports;
 
+use App\Models\MediaFile;
 use App\Services\BrandService;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Spatie\Browsershot\Browsershot;
 use Symfony\Component\HttpFoundation\Response;
@@ -302,11 +304,22 @@ class SalesReportPdfService
      *
      * Inlineado porque el HTML viaja en `file://`: una ruta a `/build/assets/…`
      * no resolvería. Además evita depender del hash que Vite asigna al archivo.
+     *
+     * ADR-026: si la organización tiene logo propio (`tenants.logo_media_file_id`)
+     * se usa ese; si no, el de la plataforma (`resources/images/logo.png`).
      */
     private function logoDataUri(): string
     {
         if (self::$logoDataUri !== null) {
             return self::$logoDataUri;
+        }
+
+        $tenantLogo = $this->tenantLogoContents();
+
+        if ($tenantLogo !== null) {
+            [$mime, $contents] = $tenantLogo;
+
+            return self::$logoDataUri = 'data:'.$mime.';base64,'.base64_encode($contents);
         }
 
         $path = resource_path('images/logo.png');
@@ -322,6 +335,35 @@ class SalesReportPdfService
         }
 
         return self::$logoDataUri = 'data:image/png;base64,'.base64_encode($contents);
+    }
+
+    /**
+     * Logo de la organización desde media_files, o null si no tiene o no se
+     * puede leer (entonces se usa el de la plataforma).
+     *
+     * @return array{0: string, 1: string}|null [mime, contents]
+     */
+    private function tenantLogoContents(): ?array
+    {
+        $logoMediaId = app(BrandService::class)->tenant()?->logo_media_file_id;
+
+        if (! $logoMediaId) {
+            return null;
+        }
+
+        $media = MediaFile::find($logoMediaId);
+
+        if (! $media || ! str_starts_with((string) $media->mime_type, 'image/')) {
+            return null;
+        }
+
+        try {
+            $contents = Storage::disk($media->disk)->get($media->path());
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return [(string) $media->mime_type, $contents];
     }
 
     /**

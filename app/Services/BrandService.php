@@ -134,14 +134,20 @@ class BrandService
     /**
      * URL del logo.
      *
-     * Se usa el logo de la plataforma (`config('brand.logo')`). El logo por
-     * cliente (`tenants.logo_media_file_id`) todavía NO se pinta: la única
-     * ruta de media es `media.download`, que sirve con
-     * `Content-Disposition: attachment` y un `<img>` no la muestra. Queda
-     * pendiente una ruta de media en línea.
+     * Si la organización tiene logo propio (`tenants.logo_media_file_id`,
+     * ADR-026) se sirve desde la ruta pública `brand.logo` en línea (un `<img>`
+     * la muestra; `media.download` sirve con `Content-Disposition: attachment`)
+     * con el id como versión para invalidar la caché al reemplazarlo. Si no,
+     * el logo de la plataforma (`config('brand.logo')`).
      */
     public function logoUrl(): string
     {
+        $logoMediaId = $this->tenant()?->logo_media_file_id;
+
+        if ($logoMediaId) {
+            return route('brand.logo', ['v' => $logoMediaId]);
+        }
+
         return asset((string) config('brand.logo', 'images/logo.png'));
     }
 

@@ -11,11 +11,11 @@ use App\Models\Order;
 use App\Models\Plant;
 use App\Models\Product;
 use App\Models\Vehicle;
+use App\Models\VehicleCompartment;
 use App\Models\Wholesaler;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class OrderController extends Controller
@@ -32,7 +32,11 @@ class OrderController extends Controller
 
     public function store(PublicOrderStoreRequest $request, OrderService $orders)
     {
-        $order = $orders->create($request->validated());
+        // `source = 'public'`: este pedido lo pidió el cliente desde el formulario
+        // web, aunque la petición llegue con sesión (p. ej. si un usuario del
+        // panel lo rellena por teléfono). `created_by` conserva quién lo envió
+        // (ADR-025).
+        $order = $orders->create($request->validated(), 'public');
 
         return redirect()->route('pedidos.confirmado', $order->id)
             ->with('flash', ['success' => __('order.registration_success')]);
@@ -84,26 +88,41 @@ class OrderController extends Controller
     }
 
     /**
-     * Consulta aditiva para el formulario público: dado una placa y un tipo,
-     * devuelve el vehículo registrado (si existe y está activo) para
-     * confirmar el campo. Limitada por throttle en la ruta.
+     * Consulta aditiva para el formulario público: dada la placa de una
+     * CISTERNA, devuelve la unidad registrada con la placa de tracto que tiene
+     * hoy y la plantilla de sus cámaras (ADR-023), para que el formulario
+     * complete solo esos datos. Limitada por throttle en la ruta.
+     *
+     * Ya no se manda `type`: la cisterna es la única entidad de `vehicles`.
      */
     public function lookupVehicle(Request $request): JsonResponse
     {
         $data = $request->validate([
             'license_plate' => ['required', 'string', 'max:20'],
-            'type' => ['required', Rule::in([Vehicle::TYPE_TANKER, Vehicle::TYPE_TRACTOR])],
         ]);
 
         $vehicle = Vehicle::query()
             ->where('license_plate', strtoupper(trim($data['license_plate'])))
-            ->where('type', $data['type'])
             ->where('is_active', 1)
-            ->first(['id', 'license_plate']);
+            ->first(['id', 'license_plate', 'tractor_plate']);
+
+        $compartments = $vehicle
+            ? VehicleCompartment::where('vehicle_id', $vehicle->id)
+                ->orderBy('compartment_number')
+                ->get(['compartment_number', 'scop', 'volume'])
+                ->map(fn (VehicleCompartment $compartment) => [
+                    'compartment_number' => (int) $compartment->compartment_number,
+                    'scop' => $compartment->scop,
+                    'volume' => (string) $compartment->volume,
+                ])
+                ->all()
+            : [];
 
         return response()->json([
             'found' => (bool) $vehicle,
             'id' => $vehicle?->id,
+            'tractor_plate' => $vehicle?->tractor_plate,
+            'compartments' => $compartments,
         ]);
     }
 
@@ -118,7 +137,6 @@ class OrderController extends Controller
             'customer',
             'driver',
             'tanker',
-            'tractor',
             'status',
             'details.plant',
             'details.wholesaler',

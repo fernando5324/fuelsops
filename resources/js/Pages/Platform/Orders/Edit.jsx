@@ -76,13 +76,16 @@ function DocumentRow({ file, removed, onToggle }) {
 }
 
 export default function OrderEdit({ order, advisors, plants, wholesalers, products }) {
+    // Modo dual (ADR-025): la misma página sirve el ALTA MANUAL desde el panel
+    // (`order` = null, ruta /pedidos/nuevo) y la EDICIÓN de un pedido.
+    const isCreate = !order;
+
     const [form] = Form.useForm();
     const [totals, setTotals] = useState({ gallons: 0, sale: 0 });
     const [removedIds, setRemovedIds] = useState(() => []);
     const [customerStatus, setCustomerStatus] = useState('idle');
     const [driverStatus, setDriverStatus] = useState('idle');
     const [tankerStatus, setTankerStatus] = useState('idle');
-    const [tractorStatus, setTractorStatus] = useState('idle');
     const { message } = App.useApp();
     const { errors } = usePage().props;
     const { t } = useTranslations();
@@ -90,13 +93,11 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
     const customerTimer = useRef(null);
     const driverTimer = useRef(null);
     const tankerTimer = useRef(null);
-    const tractorTimer = useRef(null);
 
     useEffect(() => () => {
         clearTimeout(customerTimer.current);
         clearTimeout(driverTimer.current);
         clearTimeout(tankerTimer.current);
-        clearTimeout(tractorTimer.current);
     }, []);
 
     useEffect(() => {
@@ -136,6 +137,7 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
         }));
 
     const initialValues = {
+        code: order?.code || '',
         order_date: dayjs(order?.order_date),
         advisor_id: order?.advisor_id,
         customer: {
@@ -147,9 +149,13 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
             name: order?.driver?.name || '',
         },
         tanker: { license_plate: order?.tanker?.license_plate || '' },
-        tractor: { license_plate: order?.tractor?.license_plate || '' },
-        details: initialDetails,
-        compartment_count: initialCompartments.length,
+        tractor_plate: order?.tractor_plate || '',
+        // En el alta manual arranca con una línea de detalle vacía y la
+        // distribución declarada en 1 (obligatoria, ADR-015), igual que el
+        // formulario público. Las filas de compartimentos las arma el efecto
+        // quevigila `compartment_count`.
+        details: isCreate ? [{}] : initialDetails,
+        compartment_count: isCreate ? 1 : initialCompartments.length,
         compartments: initialCompartments,
         notes: order?.notes || '',
     };
@@ -277,31 +283,54 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
         driverTimer.current = setTimeout(() => runDriverLookup(e.target.value), 500);
     };
 
-    const runVehicleLookup = async (rawPlate, type) => {
-        const plate = (rawPlate || '').trim().toUpperCase();
-        const setStatus = type === 'TANKER' ? setTankerStatus : setTractorStatus;
-        if (plate.length < 3) {
-            setStatus('idle');
+    // ADR-023: se consulta por la placa de la cisterna y se completa la placa del
+// tracto que tiene hoy. Los compartimentos SOLO se precargan si el pedido aún
+// no tiene distribución capturada: si ya la tiene, la del pedido manda (es la
+// última realidad registrada) y pisarla perdería lo ya declarado.
+const runVehicleLookup = async (rawPlate) => {
+    const plate = (rawPlate || '').trim().toUpperCase();
+    if (plate.length < 3) {
+            setTankerStatus('idle');
             return;
         }
         try {
-            const { data } = await Orders.lookupVehicle(plate, type);
-            setStatus(data.found ? 'found' : 'not_found');
+            const { data } = await Orders.lookupVehicle(plate);
+            setTankerStatus(data.found ? 'found' : 'not_found');
+
+            if (!data.found) {
+                return;
+            }
+
+            const patches = {};
+
+            if (data.tractor_plate) {
+                patches.tractor_plate = data.tractor_plate;
+            }
+
+            const template = Array.isArray(data.compartments) ? data.compartments : [];
+
+            if (template.length > 0 && initialCompartments.length === 0) {
+                patches.compartment_count = template.length;
+                patches.compartments = template.map((compartment) => ({
+                    detail_key: null,
+                    product_id: null,
+                    scop: '',
+                    volume: Number(compartment.volume) || null,
+                }));
+            }
+
+            if (Object.keys(patches).length > 0) {
+                form.setFieldsValue(patches);
+            }
         } catch (e) {
-            setStatus('idle');
+            setTankerStatus('idle');
         }
     };
 
     const onTankerChange = (e) => {
         setTankerStatus('idle');
         clearTimeout(tankerTimer.current);
-        tankerTimer.current = setTimeout(() => runVehicleLookup(e.target.value, 'TANKER'), 500);
-    };
-
-    const onTractorChange = (e) => {
-        setTractorStatus('idle');
-        clearTimeout(tractorTimer.current);
-        tractorTimer.current = setTimeout(() => runVehicleLookup(e.target.value, 'TRACTOR'), 500);
+        tankerTimer.current = setTimeout(() => runVehicleLookup(e.target.value), 500);
     };
 
     const hasErrors = errors && Object.keys(errors).length > 0;
@@ -309,13 +338,20 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
     const onFinish = (values) => {
         const data = new FormData();
         data.append('order_date', values.order_date ? values.order_date.format('YYYY-MM-DD') : dayjs(order?.order_date).format('YYYY-MM-DD'));
+
+        // El código operativo solo viaja al EDITAR (ADR-020): en el alta manual
+        // lo genera la secuencia por organización y el campo ni se muestra.
+        if (!isCreate) {
+            data.append('code', values.code ?? '');
+        }
+
         data.append('advisor_id', values.advisor_id);
         data.append('customer[tax_id]', values.customer?.tax_id ?? '');
         data.append('customer[name]', values.customer?.name ?? '');
         data.append('driver[license_number]', values.driver?.license_number ?? '');
         data.append('driver[name]', values.driver?.name ?? '');
         data.append('tanker[license_plate]', values.tanker?.license_plate ?? '');
-        data.append('tractor[license_plate]', values.tractor?.license_plate ?? '');
+        data.append('tractor_plate', values.tractor_plate ?? '');
 
         if (values.notes) {
             data.append('notes', values.notes);
@@ -344,6 +380,17 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
             }
         });
 
+        if (isCreate) {
+            // Alta manual: POST multipart directo (no hay ruta PUT ni que
+            // sobreescribir el método).
+            router.post(Orders.routes.store, data, {
+                forceFormData: true,
+                preserveScroll: true,
+            });
+
+            return;
+        }
+
         removedIds.forEach((id, i) => {
             data.append(`remove_files[${i}]`, id);
         });
@@ -361,11 +408,21 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
     return (
         <PanelLayout>
             <PageHeader
-                title={`${t('order.edit_order')} #${order?.id}`}
+                title={
+                    isCreate
+                        ? t('order.new_order')
+                        : `${t('order.edit_order')} ${order?.code || ''}`.trim()
+                }
                 extra={
-                    <Link href={Orders.routes.show(order.id)}>
-                        <Button>{t('common.cancel')}</Button>
-                    </Link>
+                    isCreate ? (
+                        <Link href={Orders.routes.index}>
+                            <Button>{t('common.cancel')}</Button>
+                        </Link>
+                    ) : (
+                        <Link href={Orders.routes.show(order.id)}>
+                            <Button>{t('common.cancel')}</Button>
+                        </Link>
+                    )
                 }
             />
 
@@ -375,7 +432,41 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                     description={t('order.section_general_help')}
                 >
                     <Row gutter={16}>
-                        <Col xs={24} sm={12}>
+                        {/* En el alta manual el código NO se pide: lo genera la
+                            secuencia por organización (ADR-020/ADR-025), igual
+                            que en el formulario público. */}
+                        {!isCreate && (
+                            <Col xs={24} sm={12}>
+                                {/* Código operativo del pedido (ADR-020): editable,
+                                    único dentro de la organización e independiente
+                                    del id interno. */}
+                                <Form.Item
+                                    name="code"
+                                    label={t('order.code')}
+                                    extra={t('order.code_hint')}
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: t('order.code_required'),
+                                        },
+                                        {
+                                            pattern: /^[A-Z0-9][A-Z0-9.-]*$/,
+                                            message: t('order.code_invalid'),
+                                        },
+                                    ]}
+                                >
+                                    <Input
+                                        maxLength={50}
+                                        placeholder={t('order.code_placeholder')}
+                                        onChange={(e) => {
+                                            const value = e.target.value.toUpperCase().replace(/\s+/g, '');
+                                            form.setFieldValue('code', value);
+                                        }}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        )}
+                        <Col xs={24} sm={isCreate ? 24 : 12}>
                             <Form.Item
                                 name="order_date"
                                 label={t('order.order_date')}
@@ -384,6 +475,9 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                 <DatePicker style={{ width: '100%' }} format={dateFormat()} />
                             </Form.Item>
                         </Col>
+                    </Row>
+
+                    <Row gutter={16}>
                         <Col xs={24} sm={12}>
                             <Form.Item
                                 name="advisor_id"
@@ -398,6 +492,7 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                 />
                             </Form.Item>
                         </Col>
+                        <Col xs={24} sm={12} />
                     </Row>
 
                     <Row gutter={16}>
@@ -494,23 +589,26 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                                     ) : null
                                 }
                             >
-                                <Input maxLength={20} onChange={onTankerChange} onBlur={(e) => runVehicleLookup(e.target.value, 'TANKER')} />
+                                <Input
+                                    maxLength={20}
+                                    placeholder={t('order.tanker_plate')}
+                                    onChange={onTankerChange}
+                                    onBlur={(e) => runVehicleLookup(e.target.value)}
+                                />
                             </Form.Item>
                         </Col>
                         <Col xs={24} sm={12}>
                             <Form.Item
-                                name={['tractor', 'license_plate']}
+                                name="tractor_plate"
                                 label={t('order.tractor_plate')}
                                 rules={[{ required: true, message: `${t('order.tractor_plate')} ${t('common.required')}` }]}
                                 extra={
-                                    tractorStatus === 'found' ? (
-                                        <Text className="ui-ok">
-                                            <CheckCircleOutlined /> {t('order.vehicle_found')}
-                                        </Text>
-                                    ) : null
+                                    <Text type="secondary" className="ui-hint">
+                                        {t('order.tractor_plate_hint')}
+                                    </Text>
                                 }
                             >
-                                <Input maxLength={20} onChange={onTractorChange} onBlur={(e) => runVehicleLookup(e.target.value, 'TRACTOR')} />
+                                <Input maxLength={20} placeholder={t('order.tractor_plate')} />
                             </Form.Item>
                         </Col>
                     </Row>
@@ -808,11 +906,17 @@ export default function OrderEdit({ order, advisors, plants, wholesalers, produc
                     )}
 
                     <div className="ui-cta-row">
-                        <Link href={Orders.routes.show(order.id)}>
-                            <Button>{t('common.cancel')}</Button>
-                        </Link>
+                        {isCreate ? (
+                            <Link href={Orders.routes.index}>
+                                <Button>{t('common.cancel')}</Button>
+                            </Link>
+                        ) : (
+                            <Link href={Orders.routes.show(order.id)}>
+                                <Button>{t('common.cancel')}</Button>
+                            </Link>
+                        )}
                         <SubmitButton loadingText={t('common.loading')}>
-                            {t('common.save_changes')}
+                            {isCreate ? t('order.create_order') : t('common.save_changes')}
                         </SubmitButton>
                     </div>
                 </SectionCard>

@@ -102,7 +102,6 @@ class OrderApiController extends Controller
             'advisor',
             'driver',
             'tanker',
-            'tractor',
             'status',
             'details.plant',
             'details.wholesaler',

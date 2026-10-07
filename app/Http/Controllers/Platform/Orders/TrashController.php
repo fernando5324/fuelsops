@@ -40,6 +40,11 @@ class TrashController extends Controller
                     $builder->orWhere('id', (int) $q);
                 }
 
+                // Código operativo del pedido (ADR-020). Un pedido en papelera
+                // conserva su código (el índice único no mira `is_deleted`), así
+                // que se puede localizar por él igual que por id.
+                $builder->orWhere('code', 'like', "%{$q}%");
+
                 $builder->orWhereHas('customer', fn ($customer) => $customer
                     ->where('name', 'like', "%{$q}%")
                     ->orWhere('tax_id', 'like', "%{$q}%"));
@@ -62,9 +67,8 @@ class TrashController extends Controller
                 'customer',
                 'advisor',
                 'driver',
-                'tanker',
-                'tractor',
-                'status',
+'tanker',
+            'status',
                 'details.plant',
                 'details.wholesaler',
                 'details.product',
@@ -75,6 +79,7 @@ class TrashController extends Controller
                 'statusHistory.previousStatus',
                 'statusHistory.createdBy:id,name',
                 'createdBy:id,name',
+                'updatedBy:id,name',
             ])
             ->findOrFail((int) $order);
 

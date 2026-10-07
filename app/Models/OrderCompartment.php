@@ -22,6 +22,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `compartment_number` es la numeración 1..N que ve el usuario. El número de
  * compartimentos no se persiste: es la cantidad de filas del pedido.
  *
+ * `vehicle_id` es la cisterna donde se repartió la carga (ADR-023). Es
+ * redundante con `orders.tanker_id` y a propósito: hace directa la consulta de
+ * las distribuciones de una cisterna (la del autocompletado) y documenta en la
+ * propia fila dónde fue la carga. Lo escribe SIEMPRE el servidor desde la
+ * cisterna del pedido, nunca viene del formulario.
+ *
  * Dato histórico del pedido: la papelera (ADR-011) no lo toca, por eso la FK a
  * orders es RESTRICT y el borrado es lógico (is_deleted).
  */
@@ -32,6 +38,7 @@ class OrderCompartment extends Model
     protected $fillable = [
         'tenant_id',
         'order_id',
+        'vehicle_id',
         'compartment_number',
         'product_id',
         'scop',
@@ -46,6 +53,11 @@ class OrderCompartment extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'order_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
 
     public function product(): BelongsTo

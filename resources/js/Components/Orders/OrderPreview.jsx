@@ -18,7 +18,7 @@ export default function OrderPreview({ order, totals }) {
         <div className="ui-order-preview">
             <div className="ui-order-preview-head">
                 <Typography.Title level={4} className="ui-order-preview-number">
-                    {`${t('order.order_number')} #${order?.id}`}
+                    {`${t('order.order')} ${order?.code || '-'}`}
                 </Typography.Title>
                 <Typography.Text className="ui-order-preview-customer">
                     {order?.customer?.name || '-'}
@@ -62,7 +62,7 @@ export default function OrderPreview({ order, totals }) {
                 </span>
                 <span className="ui-order-preview-label">{t('order.tractor')}</span>
                 <span className="ui-order-preview-value">
-                    {order?.tractor?.license_plate || '—'}
+                    {order?.tractor_plate || '—'}
                 </span>
             </div>
 
